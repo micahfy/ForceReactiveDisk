@@ -7,6 +7,8 @@ local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 -- 默认设置（会被SavedVariables覆盖）
 FRD_Settings = {
     durabilityThreshold = 30,
+    autoMode = false, -- 主动检测模式
+    checkInterval = 2.0, -- 检测频率（秒）
     minimap = {
         angle = 0,
         shown = true
@@ -16,12 +18,19 @@ FRD_Settings = {
 -- 创建主框架
 local FRD = CreateFrame("Frame", "ForceReactiveDiskFrame", UIParent)
 FRD:RegisterEvent("ADDON_LOADED")
+FRD:RegisterEvent("PLAYER_REGEN_DISABLED") -- 进入战斗
+FRD:RegisterEvent("PLAYER_REGEN_ENABLED") -- 离开战斗
+FRD.timeSinceLastCheck = 0
+FRD.inCombat = false
+
 FRD:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
         -- 确保设置已加载
         if not FRD_Settings then
             FRD_Settings = {
                 durabilityThreshold = 30,
+                autoMode = false,
+                checkInterval = 2.0,
                 minimap = {
                     angle = 0,
                     shown = true
@@ -29,6 +38,14 @@ FRD:SetScript("OnEvent", function()
             }
         end
         FRD:Initialize()
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        FRD.inCombat = true
+        if FRD_Settings.autoMode then
+            FRD:StartAutoCheck()
+        end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        FRD.inCombat = false
+        FRD:StopAutoCheck()
     end
 end)
 
@@ -145,8 +162,28 @@ function FRD:EquipDisk(bag, slot)
     PickupInventoryItem(17) -- 副手槽位
 end
 
+-- 开始自动检测
+function FRD:StartAutoCheck()
+    self.timeSinceLastCheck = 0
+    self:SetScript("OnUpdate", self.OnUpdateCheck)
+end
+
+-- 停止自动检测
+function FRD:StopAutoCheck()
+    self:SetScript("OnUpdate", nil)
+end
+
+-- OnUpdate检测函数
+function FRD:OnUpdateCheck(elapsed)
+    FRD.timeSinceLastCheck = FRD.timeSinceLastCheck + elapsed
+    if FRD.timeSinceLastCheck >= FRD_Settings.checkInterval then
+        FRD.timeSinceLastCheck = 0
+        FRD:CheckAndSwapDisk(true) -- 静默模式，不输出聊天信息
+    end
+end
+
 -- 主要检测和切换逻辑
-function FRD:CheckAndSwapDisk()
+function FRD:CheckAndSwapDisk(silent)
     -- 检查副手是否装备力反馈盾牌
     if not self:IsOffhandForceReactiveDisk() then
         -- 副手没有装备力反馈盾牌,寻找背包中的盾牌
@@ -155,9 +192,13 @@ function FRD:CheckAndSwapDisk()
             -- 按耐久度排序,选择耐久度最高的
             table.sort(disks, function(a, b) return a.durability > b.durability end)
             self:EquipDisk(disks[1].bag, disks[1].slot)
-            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 已装备力反馈盾牌 (耐久度: " .. string.format("%.1f", disks[1].durability) .. "%)")
+            if not silent then
+                DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 已装备力反馈盾牌 (耐久度: " .. string.format("%.1f", disks[1].durability) .. "%)")
+            end
         else
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 背包中没有找到力反馈盾牌!")
+            if not silent then
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 背包中没有找到力反馈盾牌!")
+            end
         end
         return
     end
@@ -175,12 +216,18 @@ function FRD:CheckAndSwapDisk()
             -- 只在找到更好的盾牌时才切换
             if bestDisk.durability > currentDurability then
                 self:EquipDisk(bestDisk.bag, bestDisk.slot)
-                DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 已切换盾牌 (" .. string.format("%.1f", currentDurability) .. "% -> " .. string.format("%.1f", bestDisk.durability) .. "%)")
+                if not silent then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 已切换盾牌 (" .. string.format("%.1f", currentDurability) .. "% -> " .. string.format("%.1f", bestDisk.durability) .. "%)")
+                end
             else
-                DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 当前盾牌耐久度 " .. string.format("%.1f", currentDurability) .. "%, 背包中没有更好的盾牌")
+                if not silent then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 当前盾牌耐久度 " .. string.format("%.1f", currentDurability) .. "%, 背包中没有更好的盾牌")
+                end
             end
         else
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 当前盾牌耐久度 " .. string.format("%.1f", currentDurability) .. "%, 背包中没有备用盾牌")
+            if not silent then
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 当前盾牌耐久度 " .. string.format("%.1f", currentDurability) .. "%, 背包中没有备用盾牌")
+            end
         end
     end
 end
@@ -219,6 +266,11 @@ function FRD:CreateMinimapButton()
         GameTooltip:AddLine("力反馈盾牌管理")
         GameTooltip:AddLine("左键: 检测并切换盾牌", 1, 1, 1)
         GameTooltip:AddLine("右键: 打开设置", 1, 1, 1)
+        if FRD_Settings.autoMode then
+            GameTooltip:AddLine("|cff00ff00主动模式: 已启用|r", 0.5, 1, 0.5)
+        else
+            GameTooltip:AddLine("|cff888888主动模式: 未启用|r", 0.5, 0.5, 0.5)
+        end
         GameTooltip:Show()
     end)
     
@@ -262,8 +314,8 @@ end
 -- 创建设置界面
 function FRD:CreateSettingsFrame()
     local frame = CreateFrame("Frame", "FRDSettingsFrame", UIParent)
-    frame:SetWidth(300)
-    frame:SetHeight(200)
+    frame:SetWidth(350)
+    frame:SetHeight(300)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -284,24 +336,69 @@ function FRD:CreateSettingsFrame()
     title:SetText("力反馈盾牌管理设置")
     
     -- 耐久度阈值标签
-    local label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -60)
-    label:SetText("切换耐久度阈值 (%):")
+    local label1 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    label1:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -60)
+    label1:SetText("切换耐久度阈值 (%):")
     
     -- 耐久度滑块
-    local slider = CreateFrame("Slider", "FRDDurabilitySlider", frame, "OptionsSliderTemplate")
-    slider:SetPoint("TOP", frame, "TOP", 0, -90)
-    slider:SetMinMaxValues(10, 90)
-    slider:SetValueStep(5)
-    slider:SetValue(FRD_Settings.durabilityThreshold)
-    slider:SetWidth(200)
-    getglobal(slider:GetName() .. "Low"):SetText("10%")
-    getglobal(slider:GetName() .. "High"):SetText("90%")
-    getglobal(slider:GetName() .. "Text"):SetText(FRD_Settings.durabilityThreshold .. "%")
+    local slider1 = CreateFrame("Slider", "FRDDurabilitySlider", frame, "OptionsSliderTemplate")
+    slider1:SetPoint("TOP", frame, "TOP", 0, -90)
+    slider1:SetMinMaxValues(10, 90)
+    slider1:SetValueStep(5)
+    slider1:SetValue(FRD_Settings.durabilityThreshold)
+    slider1:SetWidth(250)
+    getglobal(slider1:GetName() .. "Low"):SetText("10%")
+    getglobal(slider1:GetName() .. "High"):SetText("90%")
+    getglobal(slider1:GetName() .. "Text"):SetText(FRD_Settings.durabilityThreshold .. "%")
     
-    slider:SetScript("OnValueChanged", function()
+    slider1:SetScript("OnValueChanged", function()
         FRD_Settings.durabilityThreshold = this:GetValue()
         getglobal(this:GetName() .. "Text"):SetText(FRD_Settings.durabilityThreshold .. "%")
+    end)
+    
+    -- 主动模式复选框
+    local autoCheckbox = CreateFrame("CheckButton", "FRDAutoModeCheckbox", frame, "UICheckButtonTemplate")
+    autoCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -140)
+    autoCheckbox:SetWidth(24)
+    autoCheckbox:SetHeight(24)
+    autoCheckbox:SetChecked(FRD_Settings.autoMode)
+    
+    local autoLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    autoLabel:SetPoint("LEFT", autoCheckbox, "RIGHT", 5, 0)
+    autoLabel:SetText("启用主动检测模式（战斗中自动检测）")
+    
+    autoCheckbox:SetScript("OnClick", function()
+        FRD_Settings.autoMode = this:GetChecked() == 1
+        if FRD_Settings.autoMode then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 主动检测模式已启用")
+            if FRD.inCombat then
+                FRD:StartAutoCheck()
+            end
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 主动检测模式已禁用")
+            FRD:StopAutoCheck()
+        end
+    end)
+    
+    -- 检测频率标签
+    local label2 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    label2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -180)
+    label2:SetText("检测频率 (秒):")
+    
+    -- 检测频率滑块
+    local slider2 = CreateFrame("Slider", "FRDIntervalSlider", frame, "OptionsSliderTemplate")
+    slider2:SetPoint("TOP", frame, "TOP", 0, -210)
+    slider2:SetMinMaxValues(0.2, 10)
+    slider2:SetValueStep(0.2)
+    slider2:SetValue(FRD_Settings.checkInterval)
+    slider2:SetWidth(250)
+    getglobal(slider2:GetName() .. "Low"):SetText("0.2秒")
+    getglobal(slider2:GetName() .. "High"):SetText("10秒")
+    getglobal(slider2:GetName() .. "Text"):SetText(string.format("%.1f秒", FRD_Settings.checkInterval))
+    
+    slider2:SetScript("OnValueChanged", function()
+        FRD_Settings.checkInterval = this:GetValue()
+        getglobal(this:GetName() .. "Text"):SetText(string.format("%.1f秒", FRD_Settings.checkInterval))
     end)
     
     -- 关闭按钮
