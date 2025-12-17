@@ -390,11 +390,18 @@ function FRD:CreateSettingsFrame()
     slider2:SetPoint("TOP", frame, "TOP", 0, -210)
     slider2:SetMinMaxValues(0.2, 10)
     slider2:SetValueStep(0.2)
-    slider2:SetValue(FRD_Settings.checkInterval)
     slider2:SetWidth(250)
     getglobal(slider2:GetName() .. "Low"):SetText("0.2秒")
     getglobal(slider2:GetName() .. "High"):SetText("10秒")
-    getglobal(slider2:GetName() .. "Text"):SetText(string.format("%.1f秒", FRD_Settings.checkInterval))
+    
+    -- 确保值在有效范围内
+    local intervalValue = FRD_Settings.checkInterval
+    if intervalValue < 0.2 then intervalValue = 0.2 end
+    if intervalValue > 10 then intervalValue = 10 end
+    FRD_Settings.checkInterval = intervalValue
+    
+    slider2:SetValue(intervalValue)
+    getglobal(slider2:GetName() .. "Text"):SetText(string.format("%.1f秒", intervalValue))
     
     slider2:SetScript("OnValueChanged", function()
         FRD_Settings.checkInterval = this:GetValue()
