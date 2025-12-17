@@ -25,17 +25,21 @@ FRD.inCombat = false
 
 FRD:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
-        -- 确保设置已加载
+        -- 确保设置已加载并设置默认值
         if not FRD_Settings then
-            FRD_Settings = {
-                durabilityThreshold = 30,
-                autoMode = false,
-                checkInterval = 2.0,
-                minimap = {
-                    angle = 0,
-                    shown = true
-                }
-            }
+            FRD_Settings = {}
+        end
+        if not FRD_Settings.durabilityThreshold then
+            FRD_Settings.durabilityThreshold = 30
+        end
+        if not FRD_Settings.autoMode then
+            FRD_Settings.autoMode = false
+        end
+        if not FRD_Settings.checkInterval then
+            FRD_Settings.checkInterval = 2.0
+        end
+        if not FRD_Settings.minimap then
+            FRD_Settings.minimap = { angle = 0, shown = true }
         end
         FRD:Initialize()
     elseif event == "PLAYER_REGEN_DISABLED" then
@@ -165,21 +169,18 @@ end
 -- 开始自动检测
 function FRD:StartAutoCheck()
     self.timeSinceLastCheck = 0
-    self:SetScript("OnUpdate", self.OnUpdateCheck)
+    self:SetScript("OnUpdate", function(elapsed)
+        FRD.timeSinceLastCheck = FRD.timeSinceLastCheck + arg1
+        if FRD.timeSinceLastCheck >= FRD_Settings.checkInterval then
+            FRD.timeSinceLastCheck = 0
+            FRD:CheckAndSwapDisk(true) -- 静默模式，不输出聊天信息
+        end
+    end)
 end
 
 -- 停止自动检测
 function FRD:StopAutoCheck()
     self:SetScript("OnUpdate", nil)
-end
-
--- OnUpdate检测函数
-function FRD:OnUpdateCheck(elapsed)
-    FRD.timeSinceLastCheck = FRD.timeSinceLastCheck + elapsed
-    if FRD.timeSinceLastCheck >= FRD_Settings.checkInterval then
-        FRD.timeSinceLastCheck = 0
-        FRD:CheckAndSwapDisk(true) -- 静默模式，不输出聊天信息
-    end
 end
 
 -- 主要检测和切换逻辑
@@ -352,8 +353,8 @@ function FRD:CreateSettingsFrame()
     getglobal(slider1:GetName() .. "Text"):SetText(FRD_Settings.durabilityThreshold .. "%")
     
     slider1:SetScript("OnValueChanged", function()
-        FRD_Settings.durabilityThreshold = this:GetValue()
-        getglobal(this:GetName() .. "Text"):SetText(FRD_Settings.durabilityThreshold .. "%")
+        local newValue = this:GetValue()
+        getglobal(this:GetName() .. "Text"):SetText(newValue .. "%")
     end)
     
     -- 主动模式复选框
@@ -368,16 +369,7 @@ function FRD:CreateSettingsFrame()
     autoLabel:SetText("启用主动检测模式（战斗中自动检测）")
     
     autoCheckbox:SetScript("OnClick", function()
-        FRD_Settings.autoMode = this:GetChecked() == 1
-        if FRD_Settings.autoMode then
-            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 主动检测模式已启用")
-            if FRD.inCombat then
-                FRD:StartAutoCheck()
-            end
-        else
-            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 主动检测模式已禁用")
-            FRD:StopAutoCheck()
-        end
+        -- 复选框点击时不立即保存，等待确认按钮
     end)
     
     -- 检测频率标签
@@ -395,26 +387,61 @@ function FRD:CreateSettingsFrame()
     getglobal(slider2:GetName() .. "High"):SetText("10秒")
     
     -- 确保值在有效范围内
-    local intervalValue = FRD_Settings.checkInterval
+    local intervalValue = FRD_Settings.checkInterval or 2.0
     if intervalValue < 0.2 then intervalValue = 0.2 end
     if intervalValue > 10 then intervalValue = 10 end
-    FRD_Settings.checkInterval = intervalValue
     
     slider2:SetValue(intervalValue)
     getglobal(slider2:GetName() .. "Text"):SetText(string.format("%.1f秒", intervalValue))
     
     slider2:SetScript("OnValueChanged", function()
-        FRD_Settings.checkInterval = this:GetValue()
-        getglobal(this:GetName() .. "Text"):SetText(string.format("%.1f秒", FRD_Settings.checkInterval))
+        local newValue = this:GetValue()
+        getglobal(this:GetName() .. "Text"):SetText(string.format("%.1f秒", newValue))
+    end)
+    
+    -- 保存设置的临时变量
+    frame.tempSettings = {
+        durabilityThreshold = FRD_Settings.durabilityThreshold,
+        autoMode = FRD_Settings.autoMode,
+        checkInterval = intervalValue
+    }
+    
+    -- 确认按钮
+    local confirmButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
+    confirmButton:SetPoint("BOTTOM", frame, "BOTTOM", -55, 20)
+    confirmButton:SetWidth(100)
+    confirmButton:SetHeight(25)
+    confirmButton:SetText("确认")
+    confirmButton:SetScript("OnClick", function()
+        -- 保存设置
+        FRD_Settings.durabilityThreshold = slider1:GetValue()
+        FRD_Settings.autoMode = autoCheckbox:GetChecked() == 1
+        FRD_Settings.checkInterval = slider2:GetValue()
+        
+        -- 如果主动模式状态改变，更新检测状态
+        if FRD_Settings.autoMode and FRD.inCombat then
+            FRD:StartAutoCheck()
+        elseif not FRD_Settings.autoMode then
+            FRD:StopAutoCheck()
+        end
+        
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 设置已保存")
+        frame:Hide()
     end)
     
     -- 关闭按钮
     local closeButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
-    closeButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 20)
+    closeButton:SetPoint("BOTTOM", frame, "BOTTOM", 55, 20)
     closeButton:SetWidth(100)
     closeButton:SetHeight(25)
-    closeButton:SetText("关闭")
-    closeButton:SetScript("OnClick", function() frame:Hide() end)
+    closeButton:SetText("取消")
+    closeButton:SetScript("OnClick", function()
+        -- 恢复原始设置
+        slider1:SetValue(FRD_Settings.durabilityThreshold)
+        autoCheckbox:SetChecked(FRD_Settings.autoMode)
+        slider2:SetValue(FRD_Settings.checkInterval)
+        frame:Hide()
+    end)
     
     self.settingsFrame = frame
 end
