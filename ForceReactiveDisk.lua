@@ -11,6 +11,8 @@ FRD_Settings = {
     checkInterval = 2.0, -- 检测频率（秒）
     monitorEnabled = false, -- 战斗中显示耐久监控
     monitorInterval = 0.5, -- 监控刷新频率（秒）
+    monitorShowOOC = false, -- 脱战后也显示监控
+    repairReminderEnabled = true, -- 脱战时低耐久提醒
     minimap = {
         angle = 0,
         shown = true
@@ -50,6 +52,12 @@ FRD:SetScript("OnEvent", function()
         if not FRD_Settings.monitorInterval then
             FRD_Settings.monitorInterval = 0.5
         end
+        if FRD_Settings.monitorShowOOC == nil then
+            FRD_Settings.monitorShowOOC = false
+        end
+        if FRD_Settings.repairReminderEnabled == nil then
+            FRD_Settings.repairReminderEnabled = true
+        end
         if not FRD_Settings.minimap then
             FRD_Settings.minimap = { angle = 0, shown = true }
         end
@@ -66,6 +74,7 @@ FRD:SetScript("OnEvent", function()
         FRD.inCombat = false
         FRD:StopAutoCheck()
         FRD:UpdateMonitorVisibility(true)
+        FRD:CheckRepairReminder()
     elseif event == "BAG_UPDATE" or event == "UPDATE_INVENTORY_ALERTS" then
         FRD:UpdateMonitorText(false)
     elseif event == "UNIT_INVENTORY_CHANGED" then
@@ -157,6 +166,9 @@ function FRD:UpdateMonitorVisibility(forceUpdateText)
     end
 
     local shouldShow = FRD_Settings.monitorEnabled and self.inCombat
+    if FRD_Settings.monitorEnabled and FRD_Settings.monitorShowOOC then
+        shouldShow = true
+    end
     if shouldShow then
         self.monitorFrame:Show()
         self:StartMonitor()
@@ -226,6 +238,38 @@ function FRD:UpdateMonitorText(force)
     if force or self.monitorFrame.lastText ~= newText then
         self.monitorFrame.text:SetText(newText)
         self.monitorFrame.lastText = newText
+    end
+end
+
+-- 脱战后低耐久提醒
+function FRD:CheckRepairReminder()
+    if not FRD_Settings.repairReminderEnabled then
+        return
+    end
+
+    local threshold = 90
+    local needRepair = false
+
+    if self:IsOffhandForceReactiveDisk() then
+        local offDur = self:GetOffhandDurability()
+        if offDur and offDur < threshold then
+            needRepair = true
+        end
+    end
+
+    if not needRepair then
+        local disks = self:FindAllDisksInBags()
+        for i = 1, table.getn(disks) do
+            if disks[i].durability < threshold then
+                needRepair = true
+                break
+            end
+        end
+    end
+
+    if needRepair then
+        UIErrorsFrame:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！", 1, 0, 0, 1)
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！")
     end
 end
 
@@ -480,7 +524,7 @@ end
 function FRD:CreateSettingsFrame()
     local frame = CreateFrame("Frame", "FRDSettingsFrame", UIParent)
     frame:SetWidth(350)
-    frame:SetHeight(370)
+    frame:SetHeight(430)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -606,8 +650,32 @@ function FRD:CreateSettingsFrame()
         autoMode = FRD_Settings.autoMode,
         checkInterval = intervalValue,
         monitorEnabled = FRD_Settings.monitorEnabled,
-        monitorInterval = monitorIntervalValue
+        monitorInterval = monitorIntervalValue,
+        monitorShowOOC = FRD_Settings.monitorShowOOC,
+        repairReminderEnabled = FRD_Settings.repairReminderEnabled
     }
+
+    -- 脱战也显示监控复选框
+    local monitorOOCCheckbox = CreateFrame("CheckButton", "FRDMonitorOOCCheckbox", frame, "UICheckButtonTemplate")
+    monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -350)
+    monitorOOCCheckbox:SetWidth(24)
+    monitorOOCCheckbox:SetHeight(24)
+    monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
+
+    local monitorOOCLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    monitorOOCLabel:SetPoint("LEFT", monitorOOCCheckbox, "RIGHT", 5, 0)
+    monitorOOCLabel:SetText("脱战也显示盾牌耐久监控")
+
+    -- 脱战低耐久修理提醒复选框
+    local repairCheckbox = CreateFrame("CheckButton", "FRDRepairCheckbox", frame, "UICheckButtonTemplate")
+    repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -380)
+    repairCheckbox:SetWidth(24)
+    repairCheckbox:SetHeight(24)
+    repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
+
+    local repairLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    repairLabel:SetPoint("LEFT", repairCheckbox, "RIGHT", 5, 0)
+    repairLabel:SetText("脱战后若盾牌低于90%提醒修理")
     
     -- 确认按钮
     local confirmButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
@@ -622,6 +690,8 @@ function FRD:CreateSettingsFrame()
         FRD_Settings.checkInterval = slider2:GetValue()
         FRD_Settings.monitorEnabled = monitorCheckbox:GetChecked() == 1
         FRD_Settings.monitorInterval = slider3:GetValue()
+        FRD_Settings.monitorShowOOC = monitorOOCCheckbox:GetChecked() == 1
+        FRD_Settings.repairReminderEnabled = repairCheckbox:GetChecked() == 1
         
         -- 如果主动模式状态改变，更新检测状态
         if FRD_Settings.autoMode and FRD.inCombat then
@@ -649,6 +719,8 @@ function FRD:CreateSettingsFrame()
         slider2:SetValue(FRD_Settings.checkInterval)
         monitorCheckbox:SetChecked(FRD_Settings.monitorEnabled)
         slider3:SetValue(FRD_Settings.monitorInterval or 0.5)
+        monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
+        repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
         frame:Hide()
     end)
     
@@ -706,10 +778,19 @@ function FRD:RegisterSlashCommands()
                 else
                     DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 用法: /frd monitor interval 0.5")
                 end
+            elseif action == "ooc" then
+                FRD_Settings.monitorShowOOC = not FRD_Settings.monitorShowOOC
+                FRD:UpdateMonitorVisibility(true)
+                if FRD_Settings.monitorShowOOC then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 脱战也显示监控: 已启用")
+                else
+                    DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 脱战也显示监控: 已关闭")
+                end
             else
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 用法: /frd monitor  (切换开关)")
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 用法: /frd monitor on/off")
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 用法: /frd monitor interval 0.5")
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 用法: /frd monitor ooc  (脱战显示开关)")
             end
         else
             DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00力反馈盾牌管理插件命令:|r")
@@ -717,6 +798,7 @@ function FRD:RegisterSlashCommands()
             DEFAULT_CHAT_FRAME:AddMessage("/frd config - 打开设置界面")
             DEFAULT_CHAT_FRAME:AddMessage("/frd status - 显示当前状态")
             DEFAULT_CHAT_FRAME:AddMessage("/frd monitor - 切换战斗耐久监控")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd monitor ooc - 脱战也显示监控")
         end
     end
 end
