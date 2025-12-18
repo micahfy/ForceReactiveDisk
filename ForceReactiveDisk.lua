@@ -9,6 +9,7 @@ FRD_Settings = {
     durabilityThreshold = 30,
     autoMode = false, -- 主动检测模式
     checkInterval = 2.0, -- 检测频率（秒）
+    enabled = true, -- 插件开关
     monitorEnabled = false, -- 战斗中显示耐久监控
     monitorInterval = 0.5, -- 监控刷新频率（秒）
     monitorShowOOC = false, -- 脱战后也显示监控
@@ -46,6 +47,9 @@ FRD:SetScript("OnEvent", function()
         if not FRD_Settings.checkInterval then
             FRD_Settings.checkInterval = 2.0
         end
+        if FRD_Settings.enabled == nil then
+            FRD_Settings.enabled = true
+        end
         if FRD_Settings.monitorEnabled == nil then
             FRD_Settings.monitorEnabled = false
         end
@@ -66,10 +70,11 @@ FRD:SetScript("OnEvent", function()
         FRD:UpdateMonitorVisibility(true)
     elseif event == "PLAYER_REGEN_DISABLED" then
         FRD.inCombat = true
-        if FRD_Settings.autoMode then
+        if FRD_Settings.autoMode and FRD_Settings.enabled then
             FRD:StartAutoCheck()
         end
         FRD:UpdateMonitorVisibility(true)
+        FRD:UpdateMinimapIconState()
     elseif event == "PLAYER_REGEN_ENABLED" then
         FRD.inCombat = false
         FRD:StopAutoCheck()
@@ -97,6 +102,7 @@ function FRD:Initialize()
     
     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00力反馈盾牌管理插件已加载!|r 使用 /frd 或 /forcedisk 来管理盾牌")
     self:UpdateMonitorVisibility(true)
+    self:UpdateMinimapIconState()
 end
 
 -- 创建耐久监控小窗（战斗中显示）
@@ -106,8 +112,8 @@ function FRD:CreateMonitorFrame()
     end
 
     local frame = CreateFrame("Frame", "FRDMonitorFrame", UIParent)
-    frame:SetWidth(260)
-    frame:SetHeight(70)
+    frame:SetWidth(300)
+    frame:SetHeight(170)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
     frame:SetFrameStrata("DIALOG")
     frame:SetBackdrop({
@@ -121,13 +127,19 @@ function FRD:CreateMonitorFrame()
     frame:SetBackdropColor(0, 0, 0, 0.7)
     frame:Hide()
 
-    local text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    text:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -8)
-    text:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 8)
-    text:SetJustifyH("LEFT")
-    text:SetJustifyV("TOP")
-    text:SetText("")
-    frame.text = text
+    local header = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    header:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -8)
+    header:SetWidth(280)
+    header:SetJustifyH("LEFT")
+    header:SetText("")
+    frame.header = header
+
+    local container = CreateFrame("Frame", nil, frame)
+    container:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -6)
+    container:SetWidth(280)
+    container:SetHeight(110)
+    frame.iconContainer = container
+    frame.icons = {}
 
     frame:EnableMouse(true)
     frame:SetMovable(true)
@@ -165,9 +177,9 @@ function FRD:UpdateMonitorVisibility(forceUpdateText)
         self:CreateMonitorFrame()
     end
 
-    local shouldShow = FRD_Settings.monitorEnabled and self.inCombat
+    local shouldShow = FRD_Settings.enabled and FRD_Settings.monitorEnabled and self.inCombat
     if FRD_Settings.monitorEnabled and FRD_Settings.monitorShowOOC then
-        shouldShow = true
+        shouldShow = FRD_Settings.enabled
     end
     if shouldShow then
         self.monitorFrame:Show()
@@ -199,8 +211,10 @@ function FRD:UpdateMonitorText(force)
 
     local offhandIsDisk = self:IsOffhandForceReactiveDisk()
     local offhandDurability = nil
+    local offhandTexture = nil
     if offhandIsDisk then
         offhandDurability = self:GetOffhandDurability()
+        offhandTexture = GetInventoryItemTexture("player", 17)
     end
 
     local disks = self:FindAllDisksInBags()
@@ -215,30 +229,123 @@ function FRD:UpdateMonitorText(force)
         end
     end
 
-    local offhandLine
+    local entries = {}
+
     if offhandIsDisk then
-        local c = self:FormatDurabilityColor(offhandDurability)
-        offhandLine = c .. "身上(副手): 力反馈盾牌 " .. string.format("%.1f", offhandDurability) .. "%|r"
+        table.insert(entries, {
+            label = "副手",
+            durability = offhandDurability,
+            texture = offhandTexture or "Interface\\Icons\\INV_Shield_21",
+            equipped = true
+        })
+    end
+
+    if bagCount > 0 then
+        table.sort(disks, function(a, b) return a.durability > b.durability end)
+        for i = 1, bagCount do
+            local d = disks[i]
+            local texture
+            if GetContainerItemInfo then
+                local tex = GetContainerItemInfo(d.bag, d.slot)
+                if type(tex) == "table" then
+                    texture = tex.icon
+                else
+                    texture = tex
+                end
+            end
+            texture = texture or "Interface\\Icons\\INV_Shield_21"
+            table.insert(entries, {
+                label = "包" .. d.bag .. "槽" .. d.slot,
+                durability = d.durability,
+                texture = texture,
+                equipped = false
+            })
+        end
+    end
+
+    local totalDur = 0
+    local totalCount = table.getn(entries)
+    for i = 1, totalCount do
+        totalDur = totalDur + entries[i].durability
+    end
+
+    local totalInfo
+    if totalCount > 0 then
+        local totalPool = totalCount * 100
+        totalInfo = string.format("总耐久: %.1f%% / %d%%", totalDur, totalPool)
     else
-        offhandLine = "|cffff9900身上(副手): 未装备力反馈盾牌|r"
+        totalInfo = "总耐久: 无力反馈盾牌"
     end
 
-    local bagLine
-    if bagCount == 0 then
-        bagLine = "|cffff0000背包: 0 个力反馈盾牌|r"
-    else
-        local bestColor = self:FormatDurabilityColor(best)
-        local worstColor = self:FormatDurabilityColor(worst)
-        bagLine = "|cff00ff00背包: " .. bagCount .. " 个|r  " .. bestColor .. "最高 " .. string.format("%.1f", best) .. "%|r  " .. worstColor .. "最低 " .. string.format("%.1f", worst) .. "%|r"
+    self.monitorFrame.header:SetText(totalInfo)
+
+    local columns = 6
+    local iconSize = 36
+    local padding = 6
+
+    local usedCols = totalCount > 0 and math.min(columns, totalCount) or 1
+    local rows = math.max(1, math.ceil(totalCount / usedCols))
+    local contentWidth = usedCols * (iconSize + padding) - padding
+    if contentWidth < 120 then contentWidth = 120 end
+    local frameWidth = contentWidth + 20
+    local contentHeight = rows * (iconSize + 18)
+    local frameHeight = 40 + contentHeight
+
+    self.monitorFrame:SetWidth(frameWidth)
+    self.monitorFrame.header:SetWidth(frameWidth - 20)
+    self.monitorFrame.iconContainer:SetWidth(contentWidth)
+    self.monitorFrame.iconContainer:SetHeight(contentHeight)
+
+    for i = 1, totalCount do
+        local entry = entries[i]
+        local iconFrame = self.monitorFrame.icons[i]
+        if not iconFrame then
+            iconFrame = CreateFrame("Frame", nil, self.monitorFrame.iconContainer)
+            iconFrame:SetWidth(iconSize)
+            iconFrame:SetHeight(iconSize + 14)
+
+            iconFrame.bg = iconFrame:CreateTexture(nil, "BACKGROUND")
+            iconFrame.bg:SetAllPoints()
+            iconFrame.bg:SetTexture(0, 0, 0, 0.5)
+
+            iconFrame.icon = iconFrame:CreateTexture(nil, "ARTWORK")
+            iconFrame.icon:SetWidth(iconSize)
+            iconFrame.icon:SetHeight(iconSize)
+            iconFrame.icon:SetPoint("TOP", iconFrame, "TOP", 0, 0)
+
+            iconFrame.text = iconFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            iconFrame.text:SetPoint("TOP", iconFrame.icon, "BOTTOM", 0, -2)
+            iconFrame.text:SetText("")
+
+            self.monitorFrame.icons[i] = iconFrame
+        end
+
+        local col = math.mod((i - 1), usedCols)
+        local row = math.floor((i - 1) / usedCols)
+        iconFrame:SetPoint("TOPLEFT", self.monitorFrame.iconContainer, "TOPLEFT", col * (iconSize + padding), -row * (iconSize + 18))
+
+        iconFrame.icon:SetTexture(entry.texture)
+        local colorCode = self:FormatDurabilityColor(entry.durability)
+        iconFrame.text:SetText(colorCode .. string.format("%.0f", entry.durability) .. "%|r")
+
+        if entry.equipped then
+            iconFrame.bg:SetTexture(0, 0.5, 0, 0.5)
+        else
+            iconFrame.bg:SetTexture(0, 0, 0, 0.5)
+        end
+
+        iconFrame:Show()
     end
 
-    local thresholdLine = "|cffaaaaaa切换阈值: " .. (FRD_Settings.durabilityThreshold or 30) .. "%  刷新: " .. string.format("%.1f", (FRD_Settings.monitorInterval or 0.5)) .. "秒|r"
-
-    local newText = offhandLine .. "\n" .. bagLine .. "\n" .. thresholdLine
-    if force or self.monitorFrame.lastText ~= newText then
-        self.monitorFrame.text:SetText(newText)
-        self.monitorFrame.lastText = newText
+    if self.monitorFrame.icons then
+        for i = totalCount + 1, table.getn(self.monitorFrame.icons) do
+            if self.monitorFrame.icons[i] then
+                self.monitorFrame.icons[i]:Hide()
+            end
+        end
     end
+
+    self.monitorFrame:SetHeight(frameHeight)
 end
 
 -- 脱战后低耐久提醒
@@ -393,6 +500,13 @@ end
 
 -- 主要检测和切换逻辑
 function FRD:CheckAndSwapDisk(silent)
+    if not FRD_Settings.enabled then
+        if not silent then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用，右键小地图图标可重新启用")
+        end
+        return
+    end
+
     -- 检查副手是否装备力反馈盾牌
     if not self:IsOffhandForceReactiveDisk() then
         -- 副手没有装备力反馈盾牌,寻找背包中的盾牌
@@ -455,6 +569,25 @@ function FRD:CreateMinimapButton()
     icon:SetHeight(20)
     icon:SetPoint("CENTER", 0, 1)
     icon:SetTexture("Interface\\Icons\\INV_Shield_21") -- 盾牌图标
+    button.icon = icon
+
+    local enabledOverlay = button:CreateTexture("FRDMinimapEnabledOverlay", "ARTWORK")
+    enabledOverlay:SetWidth(36)
+    enabledOverlay:SetHeight(36)
+    enabledOverlay:SetPoint("CENTER", button, "CENTER", 0, 0)
+    enabledOverlay:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+    enabledOverlay:SetBlendMode("ADD")
+    enabledOverlay:SetVertexColor(0, 1, 0, 0.6) -- 绿色高亮
+    button.enabledOverlay = enabledOverlay
+
+    local disabledOverlay = button:CreateTexture("FRDMinimapDisabledOverlay", "ARTWORK")
+    disabledOverlay:SetWidth(32)
+    disabledOverlay:SetHeight(32)
+    disabledOverlay:SetPoint("CENTER", button, "CENTER", 0, 0)
+    disabledOverlay:SetTexture("Interface\\Common\\CancelRed")
+    disabledOverlay:SetBlendMode("ADD")
+    disabledOverlay:Hide()
+    button.disabledOverlay = disabledOverlay
     
     local overlay = button:CreateTexture(nil, "OVERLAY")
     overlay:SetWidth(52)
@@ -464,21 +597,38 @@ function FRD:CreateMinimapButton()
     
     button:SetScript("OnClick", function()
         if arg1 == "LeftButton" then
-            FRD:CheckAndSwapDisk()
-        elseif arg1 == "RightButton" then
             FRDSettingsFrame:Show()
+        elseif arg1 == "RightButton" then
+            FRD_Settings.enabled = not FRD_Settings.enabled
+            if FRD_Settings.enabled then
+                DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
+                FRD:UpdateMonitorVisibility(true)
+                if FRD_Settings.autoMode and FRD.inCombat then
+                    FRD:StartAutoCheck()
+                end
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
+                FRD:StopAutoCheck()
+                FRD:UpdateMonitorVisibility(true)
+            end
+            FRD:UpdateMinimapIconState()
         end
     end)
     
     button:SetScript("OnEnter", function()
         GameTooltip:SetOwner(this, "ANCHOR_LEFT")
         GameTooltip:AddLine("力反馈盾牌管理")
-        GameTooltip:AddLine("左键: 检测并切换盾牌", 1, 1, 1)
-        GameTooltip:AddLine("右键: 打开设置", 1, 1, 1)
+        GameTooltip:AddLine("左键: 打开设置", 1, 1, 1)
+        GameTooltip:AddLine("右键: 启用/停用插件", 1, 1, 1)
         if FRD_Settings.autoMode then
             GameTooltip:AddLine("|cff00ff00主动模式: 已启用|r", 0.5, 1, 0.5)
         else
             GameTooltip:AddLine("|cff888888主动模式: 未启用|r", 0.5, 0.5, 0.5)
+        end
+        if FRD_Settings.enabled then
+            GameTooltip:AddLine("|cff00ff00插件状态: 已启用|r", 0.5, 1, 0.5)
+        else
+            GameTooltip:AddLine("|cffff0000插件状态: 已停用|r", 1, 0.3, 0.3)
         end
         GameTooltip:Show()
     end)
@@ -495,8 +645,9 @@ function FRD:CreateMinimapButton()
     button:SetScript("OnDragStop", function()
         this:SetScript("OnUpdate", nil)
     end)
-    
+
     self.minimapButton = button
+    self:UpdateMinimapIconState()
 end
 
 -- 小地图按钮拖拽更新
@@ -520,11 +671,34 @@ function FRD:UpdateMinimapButtonPosition()
     self.minimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
 end
 
+-- 更新小地图图标状态（启用/禁用时高亮或变暗）
+function FRD:UpdateMinimapIconState()
+    if not self.minimapButton then
+        return
+    end
+    local icon = self.minimapButton.icon
+    local onOverlay = self.minimapButton.enabledOverlay
+    local offOverlay = self.minimapButton.disabledOverlay
+    if not icon then return end
+
+    if FRD_Settings.enabled then
+        icon:SetDesaturated(false)
+        icon:SetVertexColor(1, 1, 1, 1)
+        if onOverlay then onOverlay:Show() end
+        if offOverlay then offOverlay:Hide() end
+    else
+        icon:SetDesaturated(true)
+        icon:SetVertexColor(0.4, 0.4, 0.4, 0.8)
+        if onOverlay then onOverlay:Hide() end
+        if offOverlay then offOverlay:Show() end
+    end
+end
+
 -- 创建设置界面
 function FRD:CreateSettingsFrame()
     local frame = CreateFrame("Frame", "FRDSettingsFrame", UIParent)
     frame:SetWidth(350)
-    frame:SetHeight(430)
+    frame:SetHeight(480)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -657,7 +831,7 @@ function FRD:CreateSettingsFrame()
 
     -- 脱战也显示监控复选框
     local monitorOOCCheckbox = CreateFrame("CheckButton", "FRDMonitorOOCCheckbox", frame, "UICheckButtonTemplate")
-    monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -350)
+    monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -330)
     monitorOOCCheckbox:SetWidth(24)
     monitorOOCCheckbox:SetHeight(24)
     monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
@@ -668,7 +842,7 @@ function FRD:CreateSettingsFrame()
 
     -- 脱战低耐久修理提醒复选框
     local repairCheckbox = CreateFrame("CheckButton", "FRDRepairCheckbox", frame, "UICheckButtonTemplate")
-    repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -380)
+    repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -360)
     repairCheckbox:SetWidth(24)
     repairCheckbox:SetHeight(24)
     repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
