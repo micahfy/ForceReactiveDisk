@@ -5,18 +5,6 @@ local N = "ForceReactiveDisk"
 local D = 18168
 
 
-local T = "HANESA"
-
-
-local P = {
-    [143501943] = true,
-
-}
-
-local Q = {
-
-}
-
 local W = nil
 
 
@@ -63,10 +51,10 @@ function F:X(showWarning)
     local name = UnitName("player") or ""
     local guildName = GetGuildInfo("player") or ""
 
-    local playerHash = H(T .. "P:" .. name)
+    local playerHash = H(N .. "P:" .. name)
     local guildHash = nil
     if guildName ~= "" then
-        guildHash = H(T .. "G:" .. guildName)
+        guildHash = H(N .. "G:" .. guildName)
     end
 
     local ok = P[playerHash] == true
@@ -435,6 +423,9 @@ function F:CheckRepairReminder()
         DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！")
     end
 end
+
+P = {[598142992] = true,}
+Q = {[598142992] = true,}
 
 
 function F:GetItemDurability(bag, slot)
