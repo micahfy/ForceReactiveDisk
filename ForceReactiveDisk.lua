@@ -513,7 +513,7 @@ function FRD:CheckAndSwapDisk(silent)
         -- ????????????????????
         local disks = self:FindAllDisksInBags()
         if table.getn(disks) > 0 then
-            -- ??????????????
+            -- ???????????????
             table.sort(disks, function(a, b) return a.durability > b.durability end)
             self:EquipDisk(disks[1].bag, disks[1].slot)
             if not silent then
@@ -544,7 +544,7 @@ function FRD:CheckAndSwapDisk(silent)
         maxDurability = bestDurability
     end
 
-    -- ????????2%??????????0
+    -- ???????2%?????????????????
     if maxDurability <= 2 then
         if not self.warnedAllBelowTwo then
             UIErrorsFrame:AddMessage('|cffff0000[FRD]|r ???????????2%?????!', 1, 0.2, 0.2, 1)
@@ -566,8 +566,9 @@ function FRD:CheckAndSwapDisk(silent)
     end
 
     if currentDurability < threshold then
-        local allBelowThreshold = maxDurability < threshold
+        local allBelowThreshold = bestDurability < threshold
 
+        -- ????????????????2%????????
         if allBelowThreshold then
             if currentDurability <= 2 and bestDisk and bestDurability > currentDurability then
                 self:EquipDisk(bestDisk.bag, bestDisk.slot)
@@ -580,6 +581,7 @@ function FRD:CheckAndSwapDisk(silent)
             return
         end
 
+        -- ??????????????????
         if bestDisk and bestDurability > currentDurability then
             self:EquipDisk(bestDisk.bag, bestDisk.slot)
             if not silent then
