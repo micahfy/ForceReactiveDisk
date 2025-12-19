@@ -503,31 +503,31 @@ end
 function FRD:CheckAndSwapDisk(silent)
     if not FRD_Settings.enabled then
         if not silent then
-            DEFAULT_CHAT_FRAME:AddMessage('|cffff9900[FRD]|r ??????????????????')
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用，右键小地图图标可重新启用")
         end
         return
     end
 
-    -- ?????????????
+    -- 检查副手是否装备力反馈盾牌
     if not self:IsOffhandForceReactiveDisk() then
-        -- ????????????????????
+        -- 副手没有装备力反馈盾牌，寻找背包中的盾牌
         local disks = self:FindAllDisksInBags()
         if table.getn(disks) > 0 then
-            -- ???????????????
+            -- 按耐久度排序，选择耐久度最高的
             table.sort(disks, function(a, b) return a.durability > b.durability end)
             self:EquipDisk(disks[1].bag, disks[1].slot)
             if not silent then
-                DEFAULT_CHAT_FRAME:AddMessage('|cff00ff00[FRD]|r ???????? (??? ' .. string.format('%.1f', disks[1].durability) .. '%)')
+                DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 已装备力反馈盾牌 (耐久度 " .. string.format("%.1f", disks[1].durability) .. "%)")
             end
         else
             if not silent then
-                DEFAULT_CHAT_FRAME:AddMessage('|cffff0000[FRD]|r ????????????!')
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 背包中没有找到力反馈盾牌!")
             end
         end
         return
     end
     
-    -- ??????????,?????
+    -- 副手已装备力反馈盾牌,检查耐久度
     local currentDurability = self:GetOffhandDurability()
     local threshold = FRD_Settings.durabilityThreshold or 30
     local disks = self:FindAllDisksInBags()
@@ -544,12 +544,12 @@ function FRD:CheckAndSwapDisk(silent)
         maxDurability = bestDurability
     end
 
-    -- ???????2%?????????????????
+    -- 所有盾牌都低于2%时，一次性提醒并按残余耐久依次用尽
     if maxDurability <= 2 then
         if not self.warnedAllBelowTwo then
-            UIErrorsFrame:AddMessage('|cffff0000[FRD]|r ???????????2%?????!', 1, 0.2, 0.2, 1)
+            UIErrorsFrame:AddMessage("|cffff0000[FRD]|r 所有力反馈盾牌耐久低于2%，即将损毁!", 1, 0.2, 0.2, 1)
             if not silent then
-                DEFAULT_CHAT_FRAME:AddMessage('|cffff0000[FRD]|r ???????????2%?????!')
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 所有力反馈盾牌耐久低于2%，即将损毁!")
             end
             self.warnedAllBelowTwo = true
         end
@@ -557,7 +557,7 @@ function FRD:CheckAndSwapDisk(silent)
         if currentDurability <= 0 and bestDisk and bestDurability > currentDurability then
             self:EquipDisk(bestDisk.bag, bestDisk.slot)
             if not silent then
-                DEFAULT_CHAT_FRAME:AddMessage('|cffff0000[FRD]|r ????????0??????????????? (' .. string.format('%.1f', bestDurability) .. '%)')
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 当前盾牌耐久已为0，强制切换到剩余耐久最高的盾牌 (" .. string.format("%.1f", bestDurability) .. "%)")
             end
         end
         return
@@ -568,28 +568,28 @@ function FRD:CheckAndSwapDisk(silent)
     if currentDurability < threshold then
         local allBelowThreshold = bestDurability < threshold
 
-        -- ????????????????2%????????
+        -- 所有盾牌都低于阈值时，使用“低于2%再切”的紧急逻辑
         if allBelowThreshold then
             if currentDurability <= 2 and bestDisk and bestDurability > currentDurability then
                 self:EquipDisk(bestDisk.bag, bestDisk.slot)
                 if not silent then
-                    DEFAULT_CHAT_FRAME:AddMessage('|cffff9900[FRD]|r ??????????????????2%?????????????? (' .. string.format('%.1f', bestDurability) .. '%)')
+                    DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 所有盾牌耐久都低于阈值，当前耐久低于2%，强制切换至剩余耐久最高盾牌 (" .. string.format("%.1f", bestDurability) .. "%)")
                 end
             elseif bagCount == 0 and not silent then
-                DEFAULT_CHAT_FRAME:AddMessage('|cffff9900[FRD]|r ??????? ' .. string.format('%.1f', currentDurability) .. '%, ?????????')
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 当前盾牌耐久度 " .. string.format("%.1f", currentDurability) .. "%, 背包中没有备用盾牌")
             end
             return
         end
 
-        -- ??????????????????
+        -- 仍有盾牌高于阈值，立即切换到最佳盾牌
         if bestDisk and bestDurability > currentDurability then
             self:EquipDisk(bestDisk.bag, bestDisk.slot)
             if not silent then
-                DEFAULT_CHAT_FRAME:AddMessage('|cff00ff00[FRD]|r ?????(' .. string.format('%.1f', currentDurability) .. '% -> ' .. string.format('%.1f', bestDurability) .. '%)')
+                DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 已切换盾牌(" .. string.format("%.1f", currentDurability) .. "% -> " .. string.format("%.1f", bestDurability) .. "%)")
             end
         else
             if not silent then
-                DEFAULT_CHAT_FRAME:AddMessage('|cffff9900[FRD]|r ??????? ' .. string.format('%.1f', currentDurability) .. '%, ??????????')
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 当前盾牌耐久度 " .. string.format("%.1f", currentDurability) .. "%, 背包中没有更好的盾牌")
             end
         end
     end
