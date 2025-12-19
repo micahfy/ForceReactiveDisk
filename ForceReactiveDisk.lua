@@ -17,6 +17,8 @@ local Q = {
 
 }
 
+local W = nil
+
 
 C = {
     durabilityThreshold = 30,
@@ -57,7 +59,7 @@ local function H(str)
     return h
 end
 
-function F:IsPlayerWhitelisted(showWarning)
+function F:X(showWarning)
     local name = UnitName("player") or ""
     local guildName = GetGuildInfo("player") or ""
 
@@ -80,7 +82,7 @@ function F:IsPlayerWhitelisted(showWarning)
 end
 
 F:SetScript("OnEvent", function()
-    if event ~= "ADDON_LOADED" and not F:IsPlayerWhitelisted(false) then
+    if event ~= "ADDON_LOADED" and not F:X(false) then
         return
     end
     if event == "ADDON_LOADED" and arg1 == N then
@@ -115,7 +117,7 @@ F:SetScript("OnEvent", function()
         if not C.minimap then
             C.minimap = { angle = 0, shown = true }
         end
-        if F:IsPlayerWhitelisted(true) then
+        if F:X(true) then
             F:Initialize()
         else
             C.enabled = false
@@ -437,7 +439,7 @@ end
 
 function F:GetItemDurability(bag, slot)
     if not W then
-        CreateFrame("GameTooltip", "FRDScanTooltip", nil, "GameTooltipTemplate")
+        W = CreateFrame("GameTooltip", "FRDScanTooltip", nil, "GameTooltipTemplate")
         W:SetOwner(WorldFrame, "ANCHOR_NONE")
     end
 
@@ -504,7 +506,7 @@ end
 
 function F:GetOffhandDurability()
     if not W then
-        CreateFrame("GameTooltip", "FRDScanTooltip", nil, "GameTooltipTemplate")
+        W = CreateFrame("GameTooltip", "FRDScanTooltip", nil, "GameTooltipTemplate")
         W:SetOwner(WorldFrame, "ANCHOR_NONE")
     end
 
@@ -537,7 +539,7 @@ end
 
 
 function F:StartAutoCheck()
-    if not self:IsPlayerWhitelisted(true) then
+    if not self:X(true) then
         return
     end
     self.timeSinceLastCheck = 0
@@ -557,7 +559,7 @@ end
 
 
 function F:CheckAndSwapDisk(silent)
-    if not self:IsPlayerWhitelisted(not silent) then
+    if not self:X(not silent) then
         return
     end
     if not C.enabled then
@@ -695,7 +697,7 @@ function F:CreateMinimapButton()
     overlay:SetPoint("TOPLEFT", 0, 0)
 
     button:SetScript("OnClick", function()
-        if not F:IsPlayerWhitelisted(true) then
+        if not F:X(true) then
             return
         end
         if arg1 == "LeftButton" then
@@ -1008,7 +1010,7 @@ function F:RegisterSlashCommands()
     SLASH_FRD1 = "/frd"
     SLASH_FRD2 = "/forcedisk"
     SlashCmdList["FRD"] = function(msg)
-        if not F:IsPlayerWhitelisted(true) then
+        if not F:X(true) then
             return
         end
         msg = msg or ""
