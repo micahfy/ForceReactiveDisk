@@ -5,9 +5,11 @@ local ADDON_NAME = "ForceReactiveDisk"
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 简易授权配置（分发前请替换盐值和白名单哈希）
-local FRD_SALT = "CHANGE_ME_SALT"
+local FRD_SALT = "HANESA"
+-- Lua 5.0 不支持十六进制字面量，请使用十进制写入
 local FRD_Whitelist = {
-    -- [0xDEADBEEF] = true, -- 示例，替换为玩家名+盐后的哈希
+    [143501943] = true, -- 0x088DAA77
+    -- [3735928559] = true, -- 0xDEADBEEF 示例，替换为玩家名+盐后的哈希
 }
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -45,7 +47,7 @@ local function FRD_SimpleHash(str)
     local h = 5381
     for i = 1, string.len(str) do
         local c = string.byte(str, i)
-        h = (h * 33 + c) % 4294967296
+        h = math.mod(h * 33 + c, 4294967296)
     end
     return h
 end
