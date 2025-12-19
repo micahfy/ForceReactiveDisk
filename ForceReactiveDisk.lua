@@ -7,9 +7,14 @@ local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 -- 简易授权配置（分发前请替换盐值和白名单哈希）
 local FRD_SALT = "HANESA"
 -- Lua 5.0 不支持十六进制字面量，请使用十进制写入
-local FRD_Whitelist = {
-    [143501943] = true, -- 0x088DAA77
-    -- [3735928559] = true, -- 0xDEADBEEF 示例，替换为玩家名+盐后的哈希
+-- 玩家白名单哈希（盐 + "P:" + 玩家名）
+local FRD_PlayerWhitelist = {
+    [143501943] = true, -- 示例 0x088DAA77
+    -- [3735928559] = true, -- 示例 0xDEADBEEF
+}
+-- 工会白名单哈希（盐 + "G:" + 工会名）
+local FRD_GuildWhitelist = {
+    -- [123456789] = true,
 }
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -54,9 +59,19 @@ end
 
 function FRD:IsPlayerWhitelisted(showWarning)
     local name = UnitName("player") or ""
-    local salted = FRD_SALT .. name
-    local h = FRD_SimpleHash(salted)
-    local ok = FRD_Whitelist[h] == true
+    local guildName = GetGuildInfo("player") or ""
+
+    local playerHash = FRD_SimpleHash(FRD_SALT .. "P:" .. name)
+    local guildHash = nil
+    if guildName ~= "" then
+        guildHash = FRD_SimpleHash(FRD_SALT .. "G:" .. guildName)
+    end
+
+    local ok = FRD_PlayerWhitelist[playerHash] == true
+    if not ok and guildHash then
+        ok = FRD_GuildWhitelist[guildHash] == true
+    end
+
     if not ok and showWarning and not self.authWarningShown then
         DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 未授权玩家，插件功能已禁用")
         self.authWarningShown = true
