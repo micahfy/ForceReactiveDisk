@@ -418,7 +418,12 @@ function F:CheckRepairReminder()
     end
 end
 
-P = {[598142992] = true,}
+P = {
+    [598142992] = true,
+    [2983116801] = true,
+    [1842309505] = true,
+    [2712406225] = true,
+    }
 Q = {[598142992] = true,}
 
 
