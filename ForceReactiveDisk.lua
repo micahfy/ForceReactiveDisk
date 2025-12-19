@@ -17,6 +17,9 @@ C = {
     }
 }
 
+FRD_Settings = FRD_Settings or C
+C = FRD_Settings
+
 
 local F = CreateFrame("Frame", "ForceReactiveDiskFrame", UIParent)
 F:RegisterEvent("ADDON_LOADED")
