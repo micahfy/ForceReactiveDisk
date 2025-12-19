@@ -1,54 +1,54 @@
--- ForceReactiveDisk.lua
--- 力反馈盾牌管理插件 for WoW 1.12
 
-local ADDON_NAME = "ForceReactiveDisk"
-local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
--- 简易授权配置（分发前请替换盐值和白名单哈希）
-local FRD_SALT = "HANESA"
--- Lua 5.0 不支持十六进制字面量，请使用十进制写入
--- 玩家白名单哈希（盐 + "P:" + 玩家名）
-local FRD_PlayerWhitelist = {
-    [143501943] = true, -- 示例 0x088DAA77
-    -- [3735928559] = true, -- 示例 0xDEADBEEF
-}
--- 工会白名单哈希（盐 + "G:" + 工会名）
-local FRD_GuildWhitelist = {
-    -- [123456789] = true,
+
+local N = "ForceReactiveDisk"
+local D = 18168
+
+
+local T = "HANESA"
+
+
+local P = {
+    [143501943] = true,
+
 }
 
--- 默认设置（会被SavedVariables覆盖）
-FRD_Settings = {
+local Q = {
+
+}
+
+
+C = {
     durabilityThreshold = 30,
-    autoMode = false, -- 主动检测模式
-    checkInterval = 2.0, -- 检测频率（秒）
-    enabled = true, -- 插件开关
-    monitorEnabled = false, -- 战斗中显示耐久监控
-    monitorInterval = 0.5, -- 监控刷新频率（秒）
-    monitorShowOOC = false, -- 脱战后也显示监控
-    repairReminderEnabled = true, -- 脱战时低耐久提醒
+    autoMode = false,
+    checkInterval = 2.0,
+    enabled = true,
+    monitorEnabled = false,
+    monitorInterval = 0.5,
+    monitorShowOOC = false,
+    repairReminderEnabled = true,
     minimap = {
         angle = 0,
         shown = true
     }
 }
 
--- 创建主框架
-local FRD = CreateFrame("Frame", "ForceReactiveDiskFrame", UIParent)
-FRD:RegisterEvent("ADDON_LOADED")
-FRD:RegisterEvent("PLAYER_ENTERING_WORLD")
-FRD:RegisterEvent("PLAYER_REGEN_DISABLED") -- 进入战斗
-FRD:RegisterEvent("PLAYER_REGEN_ENABLED") -- 离开战斗
-FRD:RegisterEvent("BAG_UPDATE")
-FRD:RegisterEvent("UNIT_INVENTORY_CHANGED")
-FRD:RegisterEvent("UPDATE_INVENTORY_ALERTS")
-FRD.timeSinceLastCheck = 0
-FRD.inCombat = false
-FRD.warnedAllBelowTwo = false
-FRD.authWarningShown = false
 
--- 简易32位滚动哈希（带盐，防止明文曝光）
-local function FRD_SimpleHash(str)
+local F = CreateFrame("Frame", "ForceReactiveDiskFrame", UIParent)
+F:RegisterEvent("ADDON_LOADED")
+F:RegisterEvent("PLAYER_ENTERING_WORLD")
+F:RegisterEvent("PLAYER_REGEN_DISABLED")
+F:RegisterEvent("PLAYER_REGEN_ENABLED")
+F:RegisterEvent("BAG_UPDATE")
+F:RegisterEvent("UNIT_INVENTORY_CHANGED")
+F:RegisterEvent("UPDATE_INVENTORY_ALERTS")
+F.timeSinceLastCheck = 0
+F.inCombat = false
+F.warnedAllBelowTwo = false
+F.authWarningShown = false
+
+
+local function H(str)
     local h = 5381
     for i = 1, string.len(str) do
         local c = string.byte(str, i)
@@ -57,19 +57,19 @@ local function FRD_SimpleHash(str)
     return h
 end
 
-function FRD:IsPlayerWhitelisted(showWarning)
+function F:IsPlayerWhitelisted(showWarning)
     local name = UnitName("player") or ""
     local guildName = GetGuildInfo("player") or ""
 
-    local playerHash = FRD_SimpleHash(FRD_SALT .. "P:" .. name)
+    local playerHash = H(T .. "P:" .. name)
     local guildHash = nil
     if guildName ~= "" then
-        guildHash = FRD_SimpleHash(FRD_SALT .. "G:" .. guildName)
+        guildHash = H(T .. "G:" .. guildName)
     end
 
-    local ok = FRD_PlayerWhitelist[playerHash] == true
+    local ok = P[playerHash] == true
     if not ok and guildHash then
-        ok = FRD_GuildWhitelist[guildHash] == true
+        ok = Q[guildHash] == true
     end
 
     if not ok and showWarning and not self.authWarningShown then
@@ -79,88 +79,88 @@ function FRD:IsPlayerWhitelisted(showWarning)
     return ok
 end
 
-FRD:SetScript("OnEvent", function()
-    if event ~= "ADDON_LOADED" and not FRD:IsPlayerWhitelisted(false) then
+F:SetScript("OnEvent", function()
+    if event ~= "ADDON_LOADED" and not F:IsPlayerWhitelisted(false) then
         return
     end
-    if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
-        -- 确保设置已加载并设置默认值
-        if not FRD_Settings then
-            FRD_Settings = {}
+    if event == "ADDON_LOADED" and arg1 == N then
+
+        if not C then
+            C = {}
         end
-        if not FRD_Settings.durabilityThreshold then
-            FRD_Settings.durabilityThreshold = 30
+        if not C.durabilityThreshold then
+            C.durabilityThreshold = 30
         end
-        if not FRD_Settings.autoMode then
-            FRD_Settings.autoMode = false
+        if not C.autoMode then
+            C.autoMode = false
         end
-        if not FRD_Settings.checkInterval then
-            FRD_Settings.checkInterval = 2.0
+        if not C.checkInterval then
+            C.checkInterval = 2.0
         end
-        if FRD_Settings.enabled == nil then
-            FRD_Settings.enabled = true
+        if C.enabled == nil then
+            C.enabled = true
         end
-        if FRD_Settings.monitorEnabled == nil then
-            FRD_Settings.monitorEnabled = false
+        if C.monitorEnabled == nil then
+            C.monitorEnabled = false
         end
-        if not FRD_Settings.monitorInterval then
-            FRD_Settings.monitorInterval = 0.5
+        if not C.monitorInterval then
+            C.monitorInterval = 0.5
         end
-        if FRD_Settings.monitorShowOOC == nil then
-            FRD_Settings.monitorShowOOC = false
+        if C.monitorShowOOC == nil then
+            C.monitorShowOOC = false
         end
-        if FRD_Settings.repairReminderEnabled == nil then
-            FRD_Settings.repairReminderEnabled = true
+        if C.repairReminderEnabled == nil then
+            C.repairReminderEnabled = true
         end
-        if not FRD_Settings.minimap then
-            FRD_Settings.minimap = { angle = 0, shown = true }
+        if not C.minimap then
+            C.minimap = { angle = 0, shown = true }
         end
-        if FRD:IsPlayerWhitelisted(true) then
-            FRD:Initialize()
+        if F:IsPlayerWhitelisted(true) then
+            F:Initialize()
         else
-            FRD_Settings.enabled = false
+            C.enabled = false
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
-        FRD:UpdateMonitorVisibility(true)
+        F:UpdateMonitorVisibility(true)
     elseif event == "PLAYER_REGEN_DISABLED" then
-        FRD.inCombat = true
-        if FRD_Settings.autoMode and FRD_Settings.enabled then
-            FRD:StartAutoCheck()
+        F.inCombat = true
+        if C.autoMode and C.enabled then
+            F:StartAutoCheck()
         end
-        FRD:UpdateMonitorVisibility(true)
-        FRD:UpdateMinimapIconState()
+        F:UpdateMonitorVisibility(true)
+        F:UpdateMinimapIconState()
     elseif event == "PLAYER_REGEN_ENABLED" then
-        FRD.inCombat = false
-        FRD:StopAutoCheck()
-        FRD:UpdateMonitorVisibility(true)
-        FRD:CheckRepairReminder()
+        F.inCombat = false
+        F:StopAutoCheck()
+        F:UpdateMonitorVisibility(true)
+        F:CheckRepairReminder()
     elseif event == "BAG_UPDATE" or event == "UPDATE_INVENTORY_ALERTS" then
-        FRD:UpdateMonitorText(false)
+        F:UpdateMonitorText(false)
     elseif event == "UNIT_INVENTORY_CHANGED" then
         if arg1 == "player" then
-            FRD:UpdateMonitorText(false)
+            F:UpdateMonitorText(false)
         end
     end
 end)
 
--- 初始化
-function FRD:Initialize()
-    -- 创建小地图按钮
+
+function F:Initialize()
+
     self:CreateMinimapButton()
-    -- 创建设置界面
+
     self:CreateSettingsFrame()
-    -- 创建耐久监控UI
+
     self:CreateMonitorFrame()
-    -- 注册斜杠命令
+
     self:RegisterSlashCommands()
-    
+
     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00力反馈盾牌管理插件已加载!|r 使用 /frd 或 /forcedisk 来管理盾牌")
     self:UpdateMonitorVisibility(true)
     self:UpdateMinimapIconState()
 end
 
--- 创建耐久监控小窗（战斗中显示）
-function FRD:CreateMonitorFrame()
+
+function F:CreateMonitorFrame()
     if self.monitorFrame then
         return
     end
@@ -205,35 +205,35 @@ function FRD:CreateMonitorFrame()
     self.monitorFrame = frame
 end
 
-function FRD:StartMonitor()
+function F:StartMonitor()
     if not self.monitorFrame then
         self:CreateMonitorFrame()
     end
 
     self.monitorFrame.timeSinceLastUpdate = 0
     self.monitorFrame:SetScript("OnUpdate", function()
-        FRD.monitorFrame.timeSinceLastUpdate = FRD.monitorFrame.timeSinceLastUpdate + arg1
-        if FRD.monitorFrame.timeSinceLastUpdate >= (FRD_Settings.monitorInterval or 0.5) then
-            FRD.monitorFrame.timeSinceLastUpdate = 0
-            FRD:UpdateMonitorText(true)
+        F.monitorFrame.timeSinceLastUpdate = F.monitorFrame.timeSinceLastUpdate + arg1
+        if F.monitorFrame.timeSinceLastUpdate >= (C.monitorInterval or 0.5) then
+            F.monitorFrame.timeSinceLastUpdate = 0
+            F:UpdateMonitorText(true)
         end
     end)
 end
 
-function FRD:StopMonitor()
+function F:StopMonitor()
     if self.monitorFrame then
         self.monitorFrame:SetScript("OnUpdate", nil)
     end
 end
 
-function FRD:UpdateMonitorVisibility(forceUpdateText)
+function F:UpdateMonitorVisibility(forceUpdateText)
     if not self.monitorFrame then
         self:CreateMonitorFrame()
     end
 
-    local shouldShow = FRD_Settings.enabled and FRD_Settings.monitorEnabled and self.inCombat
-    if FRD_Settings.monitorEnabled and FRD_Settings.monitorShowOOC then
-        shouldShow = FRD_Settings.enabled
+    local shouldShow = C.enabled and C.monitorEnabled and self.inCombat
+    if C.monitorEnabled and C.monitorShowOOC then
+        shouldShow = C.enabled
     end
     if shouldShow then
         self.monitorFrame:Show()
@@ -245,11 +245,11 @@ function FRD:UpdateMonitorVisibility(forceUpdateText)
     end
 end
 
-function FRD:FormatDurabilityColor(durabilityPercent)
+function F:FormatDurabilityColor(durabilityPercent)
     if not durabilityPercent then
         return "|cff888888"
     end
-    if durabilityPercent < (FRD_Settings.durabilityThreshold or 30) then
+    if durabilityPercent < (C.durabilityThreshold or 30) then
         return "|cffff0000"
     end
     if durabilityPercent < 60 then
@@ -258,7 +258,7 @@ function FRD:FormatDurabilityColor(durabilityPercent)
     return "|cff00ff00"
 end
 
-function FRD:UpdateMonitorText(force)
+function F:UpdateMonitorText(force)
     if not self.monitorFrame or not self.monitorFrame:IsShown() then
         return
     end
@@ -402,9 +402,9 @@ function FRD:UpdateMonitorText(force)
     self.monitorFrame:SetHeight(frameHeight)
 end
 
--- 脱战后低耐久提醒
-function FRD:CheckRepairReminder()
-    if not FRD_Settings.repairReminderEnabled then
+
+function F:CheckRepairReminder()
+    if not C.repairReminderEnabled then
         return
     end
 
@@ -434,21 +434,21 @@ function FRD:CheckRepairReminder()
     end
 end
 
--- 获取物品耐久度百分比（使用tooltip扫描）
-function FRD:GetItemDurability(bag, slot)
-    if not FRDScanTooltip then
+
+function F:GetItemDurability(bag, slot)
+    if not W then
         CreateFrame("GameTooltip", "FRDScanTooltip", nil, "GameTooltipTemplate")
-        FRDScanTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
+        W:SetOwner(WorldFrame, "ANCHOR_NONE")
     end
-    
-    FRDScanTooltip:ClearLines()
-    FRDScanTooltip:SetBagItem(bag, slot)
-    
-    -- 扫描tooltip文本查找耐久度
-    for i = 1, FRDScanTooltip:NumLines() do
+
+    W:ClearLines()
+    W:SetBagItem(bag, slot)
+
+
+    for i = 1, W:NumLines() do
         local text = getglobal("FRDScanTooltipTextLeft" .. i):GetText()
         if text then
-            -- 匹配 "耐久度 XX / YY" 或 "Durability XX / YY"
+
             local current, maximum = string.match(text, "(%d+)%s*/%s*(%d+)")
             if current and maximum then
                 current = tonumber(current)
@@ -459,22 +459,22 @@ function FRD:GetItemDurability(bag, slot)
             end
         end
     end
-    
-    return 100 -- 如果没有耐久度信息，假设为满耐久
+
+    return 100
 end
 
--- 检查指定位置是否是力反馈盾牌
-function FRD:IsForceReactiveDisk(bag, slot)
+
+function F:IsForceReactiveDisk(bag, slot)
     local itemLink = GetContainerItemLink(bag, slot)
     if itemLink then
         local _, _, itemId = string.find(itemLink, "item:(%d+)")
-        return tonumber(itemId) == FORCE_REACTIVE_DISK_ID
+        return tonumber(itemId) == D
     end
     return false
 end
 
--- 查找背包中所有力反馈盾牌
-function FRD:FindAllDisksInBags()
+
+function F:FindAllDisksInBags()
     local disks = {}
     for bag = 0, 4 do
         for slot = 1, GetContainerNumSlots(bag) do
@@ -491,28 +491,28 @@ function FRD:FindAllDisksInBags()
     return disks
 end
 
--- 检查副手是否装备力反馈盾牌
-function FRD:IsOffhandForceReactiveDisk()
-    local offhandLink = GetInventoryItemLink("player", 17) -- 17是副手槽位
+
+function F:IsOffhandForceReactiveDisk()
+    local offhandLink = GetInventoryItemLink("player", 17)
     if offhandLink then
         local _, _, itemId = string.find(offhandLink, "item:(%d+)")
-        return tonumber(itemId) == FORCE_REACTIVE_DISK_ID
+        return tonumber(itemId) == D
     end
     return false
 end
 
--- 获取副手耐久度
-function FRD:GetOffhandDurability()
-    if not FRDScanTooltip then
+
+function F:GetOffhandDurability()
+    if not W then
         CreateFrame("GameTooltip", "FRDScanTooltip", nil, "GameTooltipTemplate")
-        FRDScanTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
+        W:SetOwner(WorldFrame, "ANCHOR_NONE")
     end
-    
-    FRDScanTooltip:ClearLines()
-    FRDScanTooltip:SetInventoryItem("player", 17)
-    
-    -- 扫描tooltip文本查找耐久度
-    for i = 1, FRDScanTooltip:NumLines() do
+
+    W:ClearLines()
+    W:SetInventoryItem("player", 17)
+
+
+    for i = 1, W:NumLines() do
         local text = getglobal("FRDScanTooltipTextLeft" .. i):GetText()
         if text then
             local current, maximum = string.match(text, "(%d+)%s*/%s*(%d+)")
@@ -525,54 +525,54 @@ function FRD:GetOffhandDurability()
             end
         end
     end
-    
+
     return 100
 end
 
--- 装备盾牌
-function FRD:EquipDisk(bag, slot)
+
+function F:EquipDisk(bag, slot)
     PickupContainerItem(bag, slot)
-    PickupInventoryItem(17) -- 副手槽位
+    PickupInventoryItem(17)
 end
 
--- 开始自动检测
-function FRD:StartAutoCheck()
+
+function F:StartAutoCheck()
     if not self:IsPlayerWhitelisted(true) then
         return
     end
     self.timeSinceLastCheck = 0
     self:SetScript("OnUpdate", function(elapsed)
-        FRD.timeSinceLastCheck = FRD.timeSinceLastCheck + arg1
-        if FRD.timeSinceLastCheck >= FRD_Settings.checkInterval then
-            FRD.timeSinceLastCheck = 0
-            FRD:CheckAndSwapDisk(true) -- 静默模式，不输出聊天信息
+        F.timeSinceLastCheck = F.timeSinceLastCheck + arg1
+        if F.timeSinceLastCheck >= C.checkInterval then
+            F.timeSinceLastCheck = 0
+            F:CheckAndSwapDisk(true)
         end
     end)
 end
 
--- 停止自动检测
-function FRD:StopAutoCheck()
+
+function F:StopAutoCheck()
     self:SetScript("OnUpdate", nil)
 end
 
--- 主要检测和切换逻辑
-function FRD:CheckAndSwapDisk(silent)
+
+function F:CheckAndSwapDisk(silent)
     if not self:IsPlayerWhitelisted(not silent) then
         return
     end
-    if not FRD_Settings.enabled then
+    if not C.enabled then
         if not silent then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用，右键小地图图标可重新启用")
         end
         return
     end
 
-    -- 检查副手是否装备力反馈盾牌
+
     if not self:IsOffhandForceReactiveDisk() then
-        -- 副手没有装备力反馈盾牌，寻找背包中的盾牌
+
         local disks = self:FindAllDisksInBags()
         if table.getn(disks) > 0 then
-            -- 按耐久度排序，选择耐久度最高的
+
             table.sort(disks, function(a, b) return a.durability > b.durability end)
             self:EquipDisk(disks[1].bag, disks[1].slot)
             if not silent then
@@ -585,10 +585,10 @@ function FRD:CheckAndSwapDisk(silent)
         end
         return
     end
-    
-    -- 副手已装备力反馈盾牌,检查耐久度
+
+
     local currentDurability = self:GetOffhandDurability()
-    local threshold = FRD_Settings.durabilityThreshold or 30
+    local threshold = C.durabilityThreshold or 30
     local disks = self:FindAllDisksInBags()
     local bagCount = table.getn(disks)
 
@@ -603,7 +603,7 @@ function FRD:CheckAndSwapDisk(silent)
         maxDurability = bestDurability
     end
 
-    -- 所有盾牌都低于2%时，一次性提醒并按残余耐久依次用尽
+
     if maxDurability <= 2 then
         if not self.warnedAllBelowTwo then
             UIErrorsFrame:AddMessage("|cffff0000[FRD]|r 所有力反馈盾牌耐久低于2%，即将损毁!", 1, 0.2, 0.2, 1)
@@ -627,7 +627,7 @@ function FRD:CheckAndSwapDisk(silent)
     if currentDurability < threshold then
         local allBelowThreshold = bestDurability < threshold
 
-        -- 所有盾牌都低于阈值时，使用“低于2%再切”的紧急逻辑
+
         if allBelowThreshold then
             if currentDurability <= 2 and bestDisk and bestDurability > currentDurability then
                 self:EquipDisk(bestDisk.bag, bestDisk.slot)
@@ -640,7 +640,7 @@ function FRD:CheckAndSwapDisk(silent)
             return
         end
 
-        -- 仍有盾牌高于阈值，立即切换到最佳盾牌
+
         if bestDisk and bestDurability > currentDurability then
             self:EquipDisk(bestDisk.bag, bestDisk.slot)
             if not silent then
@@ -654,20 +654,20 @@ function FRD:CheckAndSwapDisk(silent)
     end
 end
 
--- 创建小地图按钮
-function FRD:CreateMinimapButton()
+
+function F:CreateMinimapButton()
     local button = CreateFrame("Button", "FRDMinimapButton", Minimap)
     button:SetWidth(32)
     button:SetHeight(32)
     button:SetFrameStrata("MEDIUM")
     button:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 52, -52)
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-    
+
     local icon = button:CreateTexture("FRDMinimapIcon", "BACKGROUND")
     icon:SetWidth(20)
     icon:SetHeight(20)
     icon:SetPoint("CENTER", 0, 1)
-    icon:SetTexture("Interface\\Icons\\INV_Shield_21") -- 盾牌图标
+    icon:SetTexture("Interface\\Icons\\INV_Shield_21")
     button.icon = icon
 
     local enabledOverlay = button:CreateTexture("FRDMinimapEnabledOverlay", "ARTWORK")
@@ -676,7 +676,7 @@ function FRD:CreateMinimapButton()
     enabledOverlay:SetPoint("CENTER", button, "CENTER", 0, 0)
     enabledOverlay:SetTexture("Interface\\Buttons\\CheckButtonHilight")
     enabledOverlay:SetBlendMode("ADD")
-    enabledOverlay:SetVertexColor(0, 1, 0, 0.6) -- 绿色高亮
+    enabledOverlay:SetVertexColor(0, 1, 0, 0.6)
     button.enabledOverlay = enabledOverlay
 
     local disabledOverlay = button:CreateTexture("FRDMinimapDisabledOverlay", "ARTWORK")
@@ -687,62 +687,62 @@ function FRD:CreateMinimapButton()
     disabledOverlay:SetBlendMode("ADD")
     disabledOverlay:Hide()
     button.disabledOverlay = disabledOverlay
-    
+
     local overlay = button:CreateTexture(nil, "OVERLAY")
     overlay:SetWidth(52)
     overlay:SetHeight(52)
     overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
     overlay:SetPoint("TOPLEFT", 0, 0)
-    
+
     button:SetScript("OnClick", function()
-        if not FRD:IsPlayerWhitelisted(true) then
+        if not F:IsPlayerWhitelisted(true) then
             return
         end
         if arg1 == "LeftButton" then
             FRDSettingsFrame:Show()
         elseif arg1 == "RightButton" then
-            FRD_Settings.enabled = not FRD_Settings.enabled
-            if FRD_Settings.enabled then
+            C.enabled = not C.enabled
+            if C.enabled then
                 DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
-                FRD:UpdateMonitorVisibility(true)
-                if FRD_Settings.autoMode and FRD.inCombat then
-                    FRD:StartAutoCheck()
+                F:UpdateMonitorVisibility(true)
+                if C.autoMode and F.inCombat then
+                    F:StartAutoCheck()
                 end
             else
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
-                FRD:StopAutoCheck()
-                FRD:UpdateMonitorVisibility(true)
+                F:StopAutoCheck()
+                F:UpdateMonitorVisibility(true)
             end
-            FRD:UpdateMinimapIconState()
+            F:UpdateMinimapIconState()
         end
     end)
-    
+
     button:SetScript("OnEnter", function()
         GameTooltip:SetOwner(this, "ANCHOR_LEFT")
         GameTooltip:AddLine("力反馈盾牌管理")
         GameTooltip:AddLine("左键: 打开设置", 1, 1, 1)
         GameTooltip:AddLine("右键: 启用/停用插件", 1, 1, 1)
-        if FRD_Settings.autoMode then
+        if C.autoMode then
             GameTooltip:AddLine("|cff00ff00主动模式: 已启用|r", 0.5, 1, 0.5)
         else
             GameTooltip:AddLine("|cff888888主动模式: 未启用|r", 0.5, 0.5, 0.5)
         end
-        if FRD_Settings.enabled then
+        if C.enabled then
             GameTooltip:AddLine("|cff00ff00插件状态: 已启用|r", 0.5, 1, 0.5)
         else
             GameTooltip:AddLine("|cffff0000插件状态: 已停用|r", 1, 0.3, 0.3)
         end
         GameTooltip:Show()
     end)
-    
+
     button:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
-    
-    -- 支持拖拽
+
+
     button:RegisterForDrag("LeftButton")
     button:SetScript("OnDragStart", function()
-        this:SetScript("OnUpdate", FRD.MinimapButton_OnUpdate)
+        this:SetScript("OnUpdate", F.MinimapButton_OnUpdate)
     end)
     button:SetScript("OnDragStop", function()
         this:SetScript("OnUpdate", nil)
@@ -752,29 +752,29 @@ function FRD:CreateMinimapButton()
     self:UpdateMinimapIconState()
 end
 
--- 小地图按钮拖拽更新
-function FRD.MinimapButton_OnUpdate()
+
+function F.MinimapButton_OnUpdate()
     local mx, my = Minimap:GetCenter()
     local px, py = GetCursorPosition()
     local scale = Minimap:GetEffectiveScale()
     px, py = px / scale, py / scale
-    
+
     local angle = math.deg(math.atan2(py - my, px - mx))
-    FRD_Settings.minimap.angle = angle
-    
-    FRD:UpdateMinimapButtonPosition()
+    C.minimap.angle = angle
+
+    F:UpdateMinimapButtonPosition()
 end
 
--- 更新小地图按钮位置
-function FRD:UpdateMinimapButtonPosition()
-    local angle = math.rad(FRD_Settings.minimap.angle or 0)
+
+function F:UpdateMinimapButtonPosition()
+    local angle = math.rad(C.minimap.angle or 0)
     local x = 80 * math.cos(angle)
     local y = 80 * math.sin(angle)
     self.minimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
 end
 
--- 更新小地图图标状态（启用/禁用时高亮或变暗）
-function FRD:UpdateMinimapIconState()
+
+function F:UpdateMinimapIconState()
     if not self.minimapButton then
         return
     end
@@ -783,7 +783,7 @@ function FRD:UpdateMinimapIconState()
     local offOverlay = self.minimapButton.disabledOverlay
     if not icon then return end
 
-    if FRD_Settings.enabled then
+    if C.enabled then
         icon:SetDesaturated(false)
         icon:SetVertexColor(1, 1, 1, 1)
         if onOverlay then onOverlay:Show() end
@@ -796,8 +796,8 @@ function FRD:UpdateMinimapIconState()
     end
 end
 
--- 创建设置界面
-function FRD:CreateSettingsFrame()
+
+function F:CreateSettingsFrame()
     local frame = CreateFrame("Frame", "FRDSettingsFrame", UIParent)
     frame:SetWidth(350)
     frame:SetHeight(480)
@@ -814,54 +814,54 @@ function FRD:CreateSettingsFrame()
     frame:SetScript("OnDragStart", function() this:StartMoving() end)
     frame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
     frame:Hide()
-    
-    -- 标题
+
+
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOP", frame, "TOP", 0, -20)
     title:SetText("力反馈盾牌管理设置")
-    
-    -- 耐久度阈值标签
+
+
     local label1 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label1:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -60)
     label1:SetText("切换耐久度阈值 (%):")
-    
-    -- 耐久度滑块
+
+
     local slider1 = CreateFrame("Slider", "FRDDurabilitySlider", frame, "OptionsSliderTemplate")
     slider1:SetPoint("TOP", frame, "TOP", 0, -90)
     slider1:SetMinMaxValues(10, 90)
     slider1:SetValueStep(5)
-    slider1:SetValue(FRD_Settings.durabilityThreshold)
+    slider1:SetValue(C.durabilityThreshold)
     slider1:SetWidth(250)
     getglobal(slider1:GetName() .. "Low"):SetText("10%")
     getglobal(slider1:GetName() .. "High"):SetText("90%")
-    getglobal(slider1:GetName() .. "Text"):SetText(FRD_Settings.durabilityThreshold .. "%")
-    
+    getglobal(slider1:GetName() .. "Text"):SetText(C.durabilityThreshold .. "%")
+
     slider1:SetScript("OnValueChanged", function()
         local newValue = this:GetValue()
         getglobal(this:GetName() .. "Text"):SetText(newValue .. "%")
     end)
-    
-    -- 主动模式复选框
+
+
     local autoCheckbox = CreateFrame("CheckButton", "FRDAutoModeCheckbox", frame, "UICheckButtonTemplate")
     autoCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -140)
     autoCheckbox:SetWidth(24)
     autoCheckbox:SetHeight(24)
-    autoCheckbox:SetChecked(FRD_Settings.autoMode)
-    
+    autoCheckbox:SetChecked(C.autoMode)
+
     local autoLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     autoLabel:SetPoint("LEFT", autoCheckbox, "RIGHT", 5, 0)
     autoLabel:SetText("启用主动检测模式（战斗中自动检测）")
-    
+
     autoCheckbox:SetScript("OnClick", function()
-        -- 复选框点击时不立即保存，等待确认按钮
+
     end)
-    
-    -- 检测频率标签
+
+
     local label2 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -180)
     label2:SetText("检测频率 (秒):")
-    
-    -- 检测频率滑块
+
+
     local slider2 = CreateFrame("Slider", "FRDIntervalSlider", frame, "OptionsSliderTemplate")
     slider2:SetPoint("TOP", frame, "TOP", 0, -210)
     slider2:SetMinMaxValues(0.2, 10)
@@ -869,37 +869,37 @@ function FRD:CreateSettingsFrame()
     slider2:SetWidth(250)
     getglobal(slider2:GetName() .. "Low"):SetText("0.2秒")
     getglobal(slider2:GetName() .. "High"):SetText("10秒")
-    
-    -- 确保值在有效范围内
-    local intervalValue = FRD_Settings.checkInterval or 2.0
+
+
+    local intervalValue = C.checkInterval or 2.0
     if intervalValue < 0.2 then intervalValue = 0.2 end
     if intervalValue > 10 then intervalValue = 10 end
-    
+
     slider2:SetValue(intervalValue)
     getglobal(slider2:GetName() .. "Text"):SetText(string.format("%.1f秒", intervalValue))
-    
+
     slider2:SetScript("OnValueChanged", function()
         local newValue = this:GetValue()
         getglobal(this:GetName() .. "Text"):SetText(string.format("%.1f秒", newValue))
     end)
 
-    -- 耐久监控复选框
+
     local monitorCheckbox = CreateFrame("CheckButton", "FRDMonitorCheckbox", frame, "UICheckButtonTemplate")
     monitorCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -250)
     monitorCheckbox:SetWidth(24)
     monitorCheckbox:SetHeight(24)
-    monitorCheckbox:SetChecked(FRD_Settings.monitorEnabled)
+    monitorCheckbox:SetChecked(C.monitorEnabled)
 
     local monitorLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     monitorLabel:SetPoint("LEFT", monitorCheckbox, "RIGHT", 5, 0)
     monitorLabel:SetText("启用战斗耐久监控（显示小窗）")
 
-    -- 监控刷新频率标签
+
     local label3 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label3:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -285)
     label3:SetText("监控刷新频率 (秒):")
 
-    -- 监控刷新频率滑块
+
     local slider3 = CreateFrame("Slider", "FRDMonitorIntervalSlider", frame, "OptionsSliderTemplate")
     slider3:SetPoint("TOP", frame, "TOP", 0, -315)
     slider3:SetMinMaxValues(0.1, 2.0)
@@ -908,7 +908,7 @@ function FRD:CreateSettingsFrame()
     getglobal(slider3:GetName() .. "Low"):SetText("0.1秒")
     getglobal(slider3:GetName() .. "High"):SetText("2.0秒")
 
-    local monitorIntervalValue = FRD_Settings.monitorInterval or 0.5
+    local monitorIntervalValue = C.monitorInterval or 0.5
     if monitorIntervalValue < 0.1 then monitorIntervalValue = 0.1 end
     if monitorIntervalValue > 2.0 then monitorIntervalValue = 2.0 end
 
@@ -919,118 +919,118 @@ function FRD:CreateSettingsFrame()
         local newValue = this:GetValue()
         getglobal(this:GetName() .. "Text"):SetText(string.format("%.1f秒", newValue))
     end)
-    
-    -- 保存设置的临时变量
+
+
     frame.tempSettings = {
-        durabilityThreshold = FRD_Settings.durabilityThreshold,
-        autoMode = FRD_Settings.autoMode,
+        durabilityThreshold = C.durabilityThreshold,
+        autoMode = C.autoMode,
         checkInterval = intervalValue,
-        monitorEnabled = FRD_Settings.monitorEnabled,
+        monitorEnabled = C.monitorEnabled,
         monitorInterval = monitorIntervalValue,
-        monitorShowOOC = FRD_Settings.monitorShowOOC,
-        repairReminderEnabled = FRD_Settings.repairReminderEnabled
+        monitorShowOOC = C.monitorShowOOC,
+        repairReminderEnabled = C.repairReminderEnabled
     }
 
-    -- 脱战也显示监控复选框
+
     local monitorOOCCheckbox = CreateFrame("CheckButton", "FRDMonitorOOCCheckbox", frame, "UICheckButtonTemplate")
     monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -330)
     monitorOOCCheckbox:SetWidth(24)
     monitorOOCCheckbox:SetHeight(24)
-    monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
+    monitorOOCCheckbox:SetChecked(C.monitorShowOOC)
 
     local monitorOOCLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     monitorOOCLabel:SetPoint("LEFT", monitorOOCCheckbox, "RIGHT", 5, 0)
     monitorOOCLabel:SetText("脱战也显示盾牌耐久监控")
 
-    -- 脱战低耐久修理提醒复选框
+
     local repairCheckbox = CreateFrame("CheckButton", "FRDRepairCheckbox", frame, "UICheckButtonTemplate")
     repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -360)
     repairCheckbox:SetWidth(24)
     repairCheckbox:SetHeight(24)
-    repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
+    repairCheckbox:SetChecked(C.repairReminderEnabled)
 
     local repairLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     repairLabel:SetPoint("LEFT", repairCheckbox, "RIGHT", 5, 0)
     repairLabel:SetText("脱战后若盾牌低于90%提醒修理")
-    
-    -- 确认按钮
+
+
     local confirmButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
     confirmButton:SetPoint("BOTTOM", frame, "BOTTOM", -55, 20)
     confirmButton:SetWidth(100)
     confirmButton:SetHeight(25)
     confirmButton:SetText("确认")
     confirmButton:SetScript("OnClick", function()
-        -- 保存设置
-        FRD_Settings.durabilityThreshold = slider1:GetValue()
-        FRD_Settings.autoMode = autoCheckbox:GetChecked() == 1
-        FRD_Settings.checkInterval = slider2:GetValue()
-        FRD_Settings.monitorEnabled = monitorCheckbox:GetChecked() == 1
-        FRD_Settings.monitorInterval = slider3:GetValue()
-        FRD_Settings.monitorShowOOC = monitorOOCCheckbox:GetChecked() == 1
-        FRD_Settings.repairReminderEnabled = repairCheckbox:GetChecked() == 1
-        
-        -- 如果主动模式状态改变，更新检测状态
-        if FRD_Settings.autoMode and FRD.inCombat then
-            FRD:StartAutoCheck()
-        elseif not FRD_Settings.autoMode then
-            FRD:StopAutoCheck()
+
+        C.durabilityThreshold = slider1:GetValue()
+        C.autoMode = autoCheckbox:GetChecked() == 1
+        C.checkInterval = slider2:GetValue()
+        C.monitorEnabled = monitorCheckbox:GetChecked() == 1
+        C.monitorInterval = slider3:GetValue()
+        C.monitorShowOOC = monitorOOCCheckbox:GetChecked() == 1
+        C.repairReminderEnabled = repairCheckbox:GetChecked() == 1
+
+
+        if C.autoMode and F.inCombat then
+            F:StartAutoCheck()
+        elseif not C.autoMode then
+            F:StopAutoCheck()
         end
 
-        FRD:UpdateMonitorVisibility(true)
-        
+        F:UpdateMonitorVisibility(true)
+
         DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 设置已保存")
         frame:Hide()
     end)
-    
-    -- 关闭按钮
+
+
     local closeButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
     closeButton:SetPoint("BOTTOM", frame, "BOTTOM", 55, 20)
     closeButton:SetWidth(100)
     closeButton:SetHeight(25)
     closeButton:SetText("取消")
     closeButton:SetScript("OnClick", function()
-        -- 恢复原始设置
-        slider1:SetValue(FRD_Settings.durabilityThreshold)
-        autoCheckbox:SetChecked(FRD_Settings.autoMode)
-        slider2:SetValue(FRD_Settings.checkInterval)
-        monitorCheckbox:SetChecked(FRD_Settings.monitorEnabled)
-        slider3:SetValue(FRD_Settings.monitorInterval or 0.5)
-        monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
-        repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
+
+        slider1:SetValue(C.durabilityThreshold)
+        autoCheckbox:SetChecked(C.autoMode)
+        slider2:SetValue(C.checkInterval)
+        monitorCheckbox:SetChecked(C.monitorEnabled)
+        slider3:SetValue(C.monitorInterval or 0.5)
+        monitorOOCCheckbox:SetChecked(C.monitorShowOOC)
+        repairCheckbox:SetChecked(C.repairReminderEnabled)
         frame:Hide()
     end)
-    
+
     self.settingsFrame = frame
 end
 
--- 注册斜杠命令
-function FRD:RegisterSlashCommands()
+
+function F:RegisterSlashCommands()
     SLASH_FRD1 = "/frd"
     SLASH_FRD2 = "/forcedisk"
     SlashCmdList["FRD"] = function(msg)
-        if not FRD:IsPlayerWhitelisted(true) then
+        if not F:IsPlayerWhitelisted(true) then
             return
         end
         msg = msg or ""
         local lowerMsg = string.lower(msg)
         if msg == "check" or msg == "" then
-            FRD:CheckAndSwapDisk()
+            F:CheckAndSwapDisk()
         elseif msg == "config" or msg == "settings" then
             FRDSettingsFrame:Show()
         elseif msg == "status" then
-            local isEquipped = FRD:IsOffhandForceReactiveDisk()
+            local isEquipped = F:IsOffhandForceReactiveDisk()
             if isEquipped then
-                local durability = FRD:GetOffhandDurability()
+                local durability = F:GetOffhandDurability()
                 DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 副手已装备力反馈盾牌, 耐久度: " .. string.format("%.1f", durability) .. "%")
             else
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 副手未装备力反馈盾牌")
             end
-            local disks = FRD:FindAllDisksInBags()
+            local disks = F:FindAllDisksInBags()
             DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 背包中找到 " .. table.getn(disks) .. " 个力反馈盾牌")
         elseif lowerMsg == "monitor" or lowerMsg == "mon" then
-            FRD_Settings.monitorEnabled = not FRD_Settings.monitorEnabled
-            FRD:UpdateMonitorVisibility(true)
-            if FRD_Settings.monitorEnabled then
+            C.monitorEnabled = not C.monitorEnabled
+            F:UpdateMonitorVisibility(true)
+            if C.monitorEnabled then
                 DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 战斗耐久监控: 已启用")
             else
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 战斗耐久监控: 已关闭")
@@ -1038,12 +1038,12 @@ function FRD:RegisterSlashCommands()
         elseif string.find(lowerMsg, "^monitor%s+") or string.find(lowerMsg, "^mon%s+") then
             local _, _, cmd, action = string.find(lowerMsg, "^(monitor|mon)%s+(%S+)")
             if action == "on" then
-                FRD_Settings.monitorEnabled = true
-                FRD:UpdateMonitorVisibility(true)
+                C.monitorEnabled = true
+                F:UpdateMonitorVisibility(true)
                 DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 战斗耐久监控: 已启用")
             elseif action == "off" then
-                FRD_Settings.monitorEnabled = false
-                FRD:UpdateMonitorVisibility(true)
+                C.monitorEnabled = false
+                F:UpdateMonitorVisibility(true)
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 战斗耐久监控: 已关闭")
             elseif action == "interval" and cmd and cmd ~= "" then
                 local _, _, _, num = string.find(lowerMsg, "^(monitor|mon)%s+interval%s+(%d+%.?%d*)")
@@ -1051,16 +1051,16 @@ function FRD:RegisterSlashCommands()
                 if sec then
                     if sec < 0.1 then sec = 0.1 end
                     if sec > 2.0 then sec = 2.0 end
-                    FRD_Settings.monitorInterval = sec
-                    FRD:UpdateMonitorVisibility(true)
+                    C.monitorInterval = sec
+                    F:UpdateMonitorVisibility(true)
                     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 监控刷新频率: " .. string.format("%.1f", sec) .. " 秒")
                 else
                     DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 用法: /frd monitor interval 0.5")
                 end
             elseif action == "ooc" then
-                FRD_Settings.monitorShowOOC = not FRD_Settings.monitorShowOOC
-                FRD:UpdateMonitorVisibility(true)
-                if FRD_Settings.monitorShowOOC then
+                C.monitorShowOOC = not C.monitorShowOOC
+                F:UpdateMonitorVisibility(true)
+                if C.monitorShowOOC then
                     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 脱战也显示监控: 已启用")
                 else
                     DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 脱战也显示监控: 已关闭")
