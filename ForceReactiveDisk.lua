@@ -31,6 +31,7 @@ FRD:RegisterEvent("UNIT_INVENTORY_CHANGED")
 FRD:RegisterEvent("UPDATE_INVENTORY_ALERTS")
 FRD.timeSinceLastCheck = 0
 FRD.inCombat = false
+FRD.warnedAllBelowTwo = false
 
 FRD:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
@@ -502,54 +503,91 @@ end
 function FRD:CheckAndSwapDisk(silent)
     if not FRD_Settings.enabled then
         if not silent then
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用，右键小地图图标可重新启用")
+            DEFAULT_CHAT_FRAME:AddMessage('|cffff9900[FRD]|r ??????????????????')
         end
         return
     end
 
-    -- 检查副手是否装备力反馈盾牌
+    -- ?????????????
     if not self:IsOffhandForceReactiveDisk() then
-        -- 副手没有装备力反馈盾牌,寻找背包中的盾牌
+        -- ????????????????????
         local disks = self:FindAllDisksInBags()
         if table.getn(disks) > 0 then
-            -- 按耐久度排序,选择耐久度最高的
+            -- ??????????????
             table.sort(disks, function(a, b) return a.durability > b.durability end)
             self:EquipDisk(disks[1].bag, disks[1].slot)
             if not silent then
-                DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 已装备力反馈盾牌 (耐久度: " .. string.format("%.1f", disks[1].durability) .. "%)")
+                DEFAULT_CHAT_FRAME:AddMessage('|cff00ff00[FRD]|r ???????? (??? ' .. string.format('%.1f', disks[1].durability) .. '%)')
             end
         else
             if not silent then
-                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 背包中没有找到力反馈盾牌!")
+                DEFAULT_CHAT_FRAME:AddMessage('|cffff0000[FRD]|r ????????????!')
             end
         end
         return
     end
     
-    -- 副手已装备力反馈盾牌,检查耐久度
+    -- ??????????,?????
     local currentDurability = self:GetOffhandDurability()
-    if currentDurability < FRD_Settings.durabilityThreshold then
-        -- 耐久度低于阈值,寻找更好的盾牌
-        local disks = self:FindAllDisksInBags()
-        if table.getn(disks) > 0 then
-            -- 按耐久度排序
-            table.sort(disks, function(a, b) return a.durability > b.durability end)
-            local bestDisk = disks[1]
-            
-            -- 只在找到更好的盾牌时才切换
-            if bestDisk.durability > currentDurability then
+    local threshold = FRD_Settings.durabilityThreshold or 30
+    local disks = self:FindAllDisksInBags()
+    local bagCount = table.getn(disks)
+
+    if bagCount > 0 then
+        table.sort(disks, function(a, b) return a.durability > b.durability end)
+    end
+
+    local bestDisk = bagCount > 0 and disks[1] or nil
+    local bestDurability = bestDisk and bestDisk.durability or 0
+    local maxDurability = currentDurability
+    if bestDurability > maxDurability then
+        maxDurability = bestDurability
+    end
+
+    -- ????????2%??????????0
+    if maxDurability <= 2 then
+        if not self.warnedAllBelowTwo then
+            UIErrorsFrame:AddMessage('|cffff0000[FRD]|r ???????????2%?????!', 1, 0.2, 0.2, 1)
+            if not silent then
+                DEFAULT_CHAT_FRAME:AddMessage('|cffff0000[FRD]|r ???????????2%?????!')
+            end
+            self.warnedAllBelowTwo = true
+        end
+
+        if currentDurability <= 0 and bestDisk and bestDurability > currentDurability then
+            self:EquipDisk(bestDisk.bag, bestDisk.slot)
+            if not silent then
+                DEFAULT_CHAT_FRAME:AddMessage('|cffff0000[FRD]|r ????????0??????????????? (' .. string.format('%.1f', bestDurability) .. '%)')
+            end
+        end
+        return
+    else
+        self.warnedAllBelowTwo = false
+    end
+
+    if currentDurability < threshold then
+        local allBelowThreshold = maxDurability < threshold
+
+        if allBelowThreshold then
+            if currentDurability <= 2 and bestDisk and bestDurability > currentDurability then
                 self:EquipDisk(bestDisk.bag, bestDisk.slot)
                 if not silent then
-                    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 已切换盾牌 (" .. string.format("%.1f", currentDurability) .. "% -> " .. string.format("%.1f", bestDisk.durability) .. "%)")
+                    DEFAULT_CHAT_FRAME:AddMessage('|cffff9900[FRD]|r ??????????????????2%?????????????? (' .. string.format('%.1f', bestDurability) .. '%)')
                 end
-            else
-                if not silent then
-                    DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 当前盾牌耐久度 " .. string.format("%.1f", currentDurability) .. "%, 背包中没有更好的盾牌")
-                end
+            elseif bagCount == 0 and not silent then
+                DEFAULT_CHAT_FRAME:AddMessage('|cffff9900[FRD]|r ??????? ' .. string.format('%.1f', currentDurability) .. '%, ?????????')
+            end
+            return
+        end
+
+        if bestDisk and bestDurability > currentDurability then
+            self:EquipDisk(bestDisk.bag, bestDisk.slot)
+            if not silent then
+                DEFAULT_CHAT_FRAME:AddMessage('|cff00ff00[FRD]|r ?????(' .. string.format('%.1f', currentDurability) .. '% -> ' .. string.format('%.1f', bestDurability) .. '%)')
             end
         else
             if not silent then
-                DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 当前盾牌耐久度 " .. string.format("%.1f", currentDurability) .. "%, 背包中没有备用盾牌")
+                DEFAULT_CHAT_FRAME:AddMessage('|cffff9900[FRD]|r ??????? ' .. string.format('%.1f', currentDurability) .. '%, ??????????')
             end
         end
     end
