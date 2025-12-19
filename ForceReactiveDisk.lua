@@ -4,6 +4,12 @@
 local ADDON_NAME = "ForceReactiveDisk"
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
+-- 简易授权配置（分发前请替换盐值和白名单哈希）
+local FRD_SALT = "CHANGE_ME_SALT"
+local FRD_Whitelist = {
+    -- [0xDEADBEEF] = true, -- 示例，替换为玩家名+盐后的哈希
+}
+
 -- 默认设置（会被SavedVariables覆盖）
 FRD_Settings = {
     durabilityThreshold = 30,
@@ -32,8 +38,34 @@ FRD:RegisterEvent("UPDATE_INVENTORY_ALERTS")
 FRD.timeSinceLastCheck = 0
 FRD.inCombat = false
 FRD.warnedAllBelowTwo = false
+FRD.authWarningShown = false
+
+-- 简易32位滚动哈希（带盐，防止明文曝光）
+local function FRD_SimpleHash(str)
+    local h = 5381
+    for i = 1, string.len(str) do
+        local c = string.byte(str, i)
+        h = (h * 33 + c) % 4294967296
+    end
+    return h
+end
+
+function FRD:IsPlayerWhitelisted(showWarning)
+    local name = UnitName("player") or ""
+    local salted = FRD_SALT .. name
+    local h = FRD_SimpleHash(salted)
+    local ok = FRD_Whitelist[h] == true
+    if not ok and showWarning and not self.authWarningShown then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 未授权玩家，插件功能已禁用")
+        self.authWarningShown = true
+    end
+    return ok
+end
 
 FRD:SetScript("OnEvent", function()
+    if event ~= "ADDON_LOADED" and not FRD:IsPlayerWhitelisted(false) then
+        return
+    end
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
         -- 确保设置已加载并设置默认值
         if not FRD_Settings then
@@ -66,7 +98,11 @@ FRD:SetScript("OnEvent", function()
         if not FRD_Settings.minimap then
             FRD_Settings.minimap = { angle = 0, shown = true }
         end
-        FRD:Initialize()
+        if FRD:IsPlayerWhitelisted(true) then
+            FRD:Initialize()
+        else
+            FRD_Settings.enabled = false
+        end
     elseif event == "PLAYER_ENTERING_WORLD" then
         FRD:UpdateMonitorVisibility(true)
     elseif event == "PLAYER_REGEN_DISABLED" then
@@ -484,6 +520,9 @@ end
 
 -- 开始自动检测
 function FRD:StartAutoCheck()
+    if not self:IsPlayerWhitelisted(true) then
+        return
+    end
     self.timeSinceLastCheck = 0
     self:SetScript("OnUpdate", function(elapsed)
         FRD.timeSinceLastCheck = FRD.timeSinceLastCheck + arg1
@@ -501,6 +540,9 @@ end
 
 -- 主要检测和切换逻辑
 function FRD:CheckAndSwapDisk(silent)
+    if not self:IsPlayerWhitelisted(not silent) then
+        return
+    end
     if not FRD_Settings.enabled then
         if not silent then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用，右键小地图图标可重新启用")
@@ -636,6 +678,9 @@ function FRD:CreateMinimapButton()
     overlay:SetPoint("TOPLEFT", 0, 0)
     
     button:SetScript("OnClick", function()
+        if not FRD:IsPlayerWhitelisted(true) then
+            return
+        end
         if arg1 == "LeftButton" then
             FRDSettingsFrame:Show()
         elseif arg1 == "RightButton" then
@@ -946,6 +991,9 @@ function FRD:RegisterSlashCommands()
     SLASH_FRD1 = "/frd"
     SLASH_FRD2 = "/forcedisk"
     SlashCmdList["FRD"] = function(msg)
+        if not FRD:IsPlayerWhitelisted(true) then
+            return
+        end
         msg = msg or ""
         local lowerMsg = string.lower(msg)
         if msg == "check" or msg == "" then
