@@ -1,12 +1,6 @@
-
-
-
 local N = "ForceReactiveDisk"
 local D = 18168
-
-
 local W = nil
-
 
 C = {
     durabilityThreshold = 30,
@@ -63,7 +57,7 @@ function F:X(showWarning)
     end
 
     if not ok and showWarning and not self.authWarningShown then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 未授权玩家，插件功能已禁用")
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 需要请联系开发者")
         self.authWarningShown = true
     end
     return ok
