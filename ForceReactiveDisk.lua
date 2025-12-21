@@ -424,10 +424,11 @@ end
 function F:ShowHelp()
     local tips = {
         "|cff00ff00[FRD]|r 使用帮助：",
-        "/frd 或 /frd check 立即检测并按规则切换盾牌",
-        "/frd config 打开设置；/frd monitor on/off 切换战斗监控",
-        "设置：滑块设定阈值与刷新频率，勾选主动模式可战斗中自动检测",
-        "白名单未通过时插件停用，如需授权请添加哈希到表中"
+        "勾选主动模式可战斗中自动检测",
+        "如果自动模式卡顿，可将 /frd 绑定到技能宏",
+        "小地图图标鼠标右键可以开关插件",
+        "设置：滑块设定阈值与刷新频率，建议阈值为15% 和0.4秒刷新率",
+        "MirAcLe工会专用版，作者安娜希尔"
     }
     for i = 1, table.getn(tips) do
         DEFAULT_CHAT_FRAME:AddMessage(tips[i])
