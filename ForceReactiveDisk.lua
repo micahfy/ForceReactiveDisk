@@ -1131,6 +1131,16 @@ function F:RegisterSlashCommands()
         end
         msg = msg or ""
         local lowerMsg = string.lower(msg)
+        if lowerMsg == "enable" or lowerMsg == "on" then
+            FRD_Settings.enabled = true
+            if FRD_Settings.autoMode and F.inCombat then
+                F:StartAutoCheck()
+            end
+            F:UpdateMonitorVisibility(true)
+            F:UpdateMinimapIconState()
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
+            return
+        end
         if msg == "check" or msg == "" then
             F:CheckAndSwapDisk()
         elseif msg == "config" or msg == "settings" then
