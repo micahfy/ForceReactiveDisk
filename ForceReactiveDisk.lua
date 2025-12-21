@@ -2,23 +2,23 @@ local N = "ForceReactiveDisk"
 local D = 18168
 local W = nil
 
-C = {
-    durabilityThreshold = 30,
-    autoMode = false,
-    checkInterval = 2.0,
-    enabled = true,
-    monitorEnabled = false,
-    monitorInterval = 0.5,
-    monitorShowOOC = false,
-    repairReminderEnabled = true,
-    minimap = {
-        angle = 0,
-        shown = true
+if not FRD_Settings then
+    FRD_Settings = {
+        durabilityThreshold = 30,
+        autoMode = false,
+        checkInterval = 2.0,
+        enabled = true,
+        monitorEnabled = false,
+        monitorInterval = 0.5,
+        monitorShowOOC = false,
+        repairReminderEnabled = true,
+        minimap = {
+            angle = 0,
+            shown = true
+        }
     }
-}
+end
 
-FRD_Settings = FRD_Settings or C
-C = FRD_Settings
 
 
 local F = CreateFrame("Frame", "ForceReactiveDiskFrame", UIParent)
@@ -72,46 +72,46 @@ F:SetScript("OnEvent", function()
     end
     if event == "ADDON_LOADED" and arg1 == N then
 
-        if not C then
-            C = {}
+        if not FRD_Settings then
+            FRD_Settings = {}
         end
-        if not C.durabilityThreshold then
-            C.durabilityThreshold = 30
+        if not FRD_Settings.durabilityThreshold then
+            FRD_Settings.durabilityThreshold = 30
         end
-        if not C.autoMode then
-            C.autoMode = false
+        if not FRD_Settings.autoMode then
+            FRD_Settings.autoMode = false
         end
-        if not C.checkInterval then
-            C.checkInterval = 2.0
+        if not FRD_Settings.checkInterval then
+            FRD_Settings.checkInterval = 2.0
         end
-        if C.enabled == nil then
-            C.enabled = true
+        if FRD_Settings.enabled == nil then
+            FRD_Settings.enabled = true
         end
-        if C.monitorEnabled == nil then
-            C.monitorEnabled = false
+        if FRD_Settings.monitorEnabled == nil then
+            FRD_Settings.monitorEnabled = false
         end
-        if not C.monitorInterval then
-            C.monitorInterval = 0.5
+        if not FRD_Settings.monitorInterval then
+            FRD_Settings.monitorInterval = 0.5
         end
-        if C.monitorShowOOC == nil then
-            C.monitorShowOOC = false
+        if FRD_Settings.monitorShowOOC == nil then
+            FRD_Settings.monitorShowOOC = false
         end
-        if C.repairReminderEnabled == nil then
-            C.repairReminderEnabled = true
+        if FRD_Settings.repairReminderEnabled == nil then
+            FRD_Settings.repairReminderEnabled = true
         end
-        if not C.minimap then
-            C.minimap = { angle = 0, shown = true }
+        if not FRD_Settings.minimap then
+            FRD_Settings.minimap = { angle = 0, shown = true }
         end
         if F:X(true) then
             F:Initialize()
         else
-            C.enabled = false
+            FRD_Settings.enabled = false
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
         F:UpdateMonitorVisibility(true)
     elseif event == "PLAYER_REGEN_DISABLED" then
         F.inCombat = true
-        if C.autoMode and C.enabled then
+        if FRD_Settings.autoMode and FRD_Settings.enabled then
             F:StartAutoCheck()
         end
         F:UpdateMonitorVisibility(true)
@@ -200,7 +200,7 @@ function F:StartMonitor()
     self.monitorFrame.timeSinceLastUpdate = 0
     self.monitorFrame:SetScript("OnUpdate", function()
         F.monitorFrame.timeSinceLastUpdate = F.monitorFrame.timeSinceLastUpdate + arg1
-        if F.monitorFrame.timeSinceLastUpdate >= (C.monitorInterval or 0.5) then
+        if F.monitorFrame.timeSinceLastUpdate >= (FRD_Settings.monitorInterval or 0.5) then
             F.monitorFrame.timeSinceLastUpdate = 0
             F:UpdateMonitorText(true)
         end
@@ -218,9 +218,9 @@ function F:UpdateMonitorVisibility(forceUpdateText)
         self:CreateMonitorFrame()
     end
 
-    local shouldShow = C.enabled and C.monitorEnabled and self.inCombat
-    if C.monitorEnabled and C.monitorShowOOC then
-        shouldShow = C.enabled
+    local shouldShow = FRD_Settings.enabled and FRD_Settings.monitorEnabled and self.inCombat
+    if FRD_Settings.monitorEnabled and FRD_Settings.monitorShowOOC then
+        shouldShow = FRD_Settings.enabled
     end
     if shouldShow then
         self.monitorFrame:Show()
@@ -236,7 +236,7 @@ function F:FormatDurabilityColor(durabilityPercent)
     if not durabilityPercent then
         return "|cff888888"
     end
-    if durabilityPercent < (C.durabilityThreshold or 30) then
+    if durabilityPercent < (FRD_Settings.durabilityThreshold or 30) then
         return "|cffff0000"
     end
     if durabilityPercent < 60 then
@@ -391,7 +391,7 @@ end
 
 
 function F:CheckRepairReminder()
-    if not C.repairReminderEnabled then
+    if not FRD_Settings.repairReminderEnabled then
         return
     end
 
@@ -539,7 +539,7 @@ function F:StartAutoCheck()
     self.timeSinceLastCheck = 0
     self:SetScript("OnUpdate", function(elapsed)
         F.timeSinceLastCheck = F.timeSinceLastCheck + arg1
-        if F.timeSinceLastCheck >= C.checkInterval then
+        if F.timeSinceLastCheck >= FRD_Settings.checkInterval then
             F.timeSinceLastCheck = 0
             F:CheckAndSwapDisk(true)
         end
@@ -556,7 +556,7 @@ function F:CheckAndSwapDisk(silent)
     if not self:X(not silent) then
         return
     end
-    if not C.enabled then
+    if not FRD_Settings.enabled then
         if not silent then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用，右键小地图图标可重新启用")
         end
@@ -584,7 +584,7 @@ function F:CheckAndSwapDisk(silent)
 
 
     local currentDurability = self:GetOffhandDurability()
-    local threshold = C.durabilityThreshold or 30
+    local threshold = FRD_Settings.durabilityThreshold or 30
     local disks = self:FindAllDisksInBags()
     local bagCount = table.getn(disks)
 
@@ -697,11 +697,11 @@ function F:CreateMinimapButton()
         if arg1 == "LeftButton" then
             FRDSettingsFrame:Show()
         elseif arg1 == "RightButton" then
-            C.enabled = not C.enabled
-            if C.enabled then
+            FRD_Settings.enabled = not FRD_Settings.enabled
+            if FRD_Settings.enabled then
                 DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
                 F:UpdateMonitorVisibility(true)
-                if C.autoMode and F.inCombat then
+                if FRD_Settings.autoMode and F.inCombat then
                     F:StartAutoCheck()
                 end
             else
@@ -718,12 +718,12 @@ function F:CreateMinimapButton()
         GameTooltip:AddLine("力反馈盾牌管理")
         GameTooltip:AddLine("左键: 打开设置", 1, 1, 1)
         GameTooltip:AddLine("右键: 启用/停用插件", 1, 1, 1)
-        if C.autoMode then
+        if FRD_Settings.autoMode then
             GameTooltip:AddLine("|cff00ff00主动模式: 已启用|r", 0.5, 1, 0.5)
         else
             GameTooltip:AddLine("|cff888888主动模式: 未启用|r", 0.5, 0.5, 0.5)
         end
-        if C.enabled then
+        if FRD_Settings.enabled then
             GameTooltip:AddLine("|cff00ff00插件状态: 已启用|r", 0.5, 1, 0.5)
         else
             GameTooltip:AddLine("|cffff0000插件状态: 已停用|r", 1, 0.3, 0.3)
@@ -756,14 +756,14 @@ function F.MinimapButton_OnUpdate()
     px, py = px / scale, py / scale
 
     local angle = math.deg(math.atan2(py - my, px - mx))
-    C.minimap.angle = angle
+    FRD_Settings.minimap.angle = angle
 
     F:UpdateMinimapButtonPosition()
 end
 
 
 function F:UpdateMinimapButtonPosition()
-    local angle = math.rad(C.minimap.angle or 0)
+    local angle = math.rad(FRD_Settings.minimap.angle or 0)
     local x = 80 * math.cos(angle)
     local y = 80 * math.sin(angle)
     self.minimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
@@ -779,7 +779,7 @@ function F:UpdateMinimapIconState()
     local offOverlay = self.minimapButton.disabledOverlay
     if not icon then return end
 
-    if C.enabled then
+    if FRD_Settings.enabled then
         icon:SetDesaturated(false)
         icon:SetVertexColor(1, 1, 1, 1)
         if onOverlay then onOverlay:Show() end
@@ -826,11 +826,11 @@ function F:CreateSettingsFrame()
     slider1:SetPoint("TOP", frame, "TOP", 0, -90)
     slider1:SetMinMaxValues(10, 90)
     slider1:SetValueStep(5)
-    slider1:SetValue(C.durabilityThreshold)
+    slider1:SetValue(FRD_Settings.durabilityThreshold)
     slider1:SetWidth(250)
     getglobal(slider1:GetName() .. "Low"):SetText("10%")
     getglobal(slider1:GetName() .. "High"):SetText("90%")
-    getglobal(slider1:GetName() .. "Text"):SetText(C.durabilityThreshold .. "%")
+    getglobal(slider1:GetName() .. "Text"):SetText(FRD_Settings.durabilityThreshold .. "%")
 
     slider1:SetScript("OnValueChanged", function()
         local newValue = this:GetValue()
@@ -842,7 +842,7 @@ function F:CreateSettingsFrame()
     autoCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -140)
     autoCheckbox:SetWidth(24)
     autoCheckbox:SetHeight(24)
-    autoCheckbox:SetChecked(C.autoMode)
+    autoCheckbox:SetChecked(FRD_Settings.autoMode)
 
     local autoLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     autoLabel:SetPoint("LEFT", autoCheckbox, "RIGHT", 5, 0)
@@ -867,7 +867,7 @@ function F:CreateSettingsFrame()
     getglobal(slider2:GetName() .. "High"):SetText("10秒")
 
 
-    local intervalValue = C.checkInterval or 2.0
+    local intervalValue = FRD_Settings.checkInterval or 2.0
     if intervalValue < 0.2 then intervalValue = 0.2 end
     if intervalValue > 10 then intervalValue = 10 end
 
@@ -884,7 +884,7 @@ function F:CreateSettingsFrame()
     monitorCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -250)
     monitorCheckbox:SetWidth(24)
     monitorCheckbox:SetHeight(24)
-    monitorCheckbox:SetChecked(C.monitorEnabled)
+    monitorCheckbox:SetChecked(FRD_Settings.monitorEnabled)
 
     local monitorLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     monitorLabel:SetPoint("LEFT", monitorCheckbox, "RIGHT", 5, 0)
@@ -904,7 +904,7 @@ function F:CreateSettingsFrame()
     getglobal(slider3:GetName() .. "Low"):SetText("0.1秒")
     getglobal(slider3:GetName() .. "High"):SetText("2.0秒")
 
-    local monitorIntervalValue = C.monitorInterval or 0.5
+    local monitorIntervalValue = FRD_Settings.monitorInterval or 0.5
     if monitorIntervalValue < 0.1 then monitorIntervalValue = 0.1 end
     if monitorIntervalValue > 2.0 then monitorIntervalValue = 2.0 end
 
@@ -918,13 +918,13 @@ function F:CreateSettingsFrame()
 
 
     frame.tempSettings = {
-        durabilityThreshold = C.durabilityThreshold,
-        autoMode = C.autoMode,
+        durabilityThreshold = FRD_Settings.durabilityThreshold,
+        autoMode = FRD_Settings.autoMode,
         checkInterval = intervalValue,
-        monitorEnabled = C.monitorEnabled,
+        monitorEnabled = FRD_Settings.monitorEnabled,
         monitorInterval = monitorIntervalValue,
-        monitorShowOOC = C.monitorShowOOC,
-        repairReminderEnabled = C.repairReminderEnabled
+        monitorShowOOC = FRD_Settings.monitorShowOOC,
+        repairReminderEnabled = FRD_Settings.repairReminderEnabled
     }
 
 
@@ -932,7 +932,7 @@ function F:CreateSettingsFrame()
     monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -330)
     monitorOOCCheckbox:SetWidth(24)
     monitorOOCCheckbox:SetHeight(24)
-    monitorOOCCheckbox:SetChecked(C.monitorShowOOC)
+    monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
 
     local monitorOOCLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     monitorOOCLabel:SetPoint("LEFT", monitorOOCCheckbox, "RIGHT", 5, 0)
@@ -943,7 +943,7 @@ function F:CreateSettingsFrame()
     repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -360)
     repairCheckbox:SetWidth(24)
     repairCheckbox:SetHeight(24)
-    repairCheckbox:SetChecked(C.repairReminderEnabled)
+    repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
 
     local repairLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     repairLabel:SetPoint("LEFT", repairCheckbox, "RIGHT", 5, 0)
@@ -957,18 +957,18 @@ function F:CreateSettingsFrame()
     confirmButton:SetText("确认")
     confirmButton:SetScript("OnClick", function()
 
-        C.durabilityThreshold = slider1:GetValue()
-        C.autoMode = autoCheckbox:GetChecked() == 1
-        C.checkInterval = slider2:GetValue()
-        C.monitorEnabled = monitorCheckbox:GetChecked() == 1
-        C.monitorInterval = slider3:GetValue()
-        C.monitorShowOOC = monitorOOCCheckbox:GetChecked() == 1
-        C.repairReminderEnabled = repairCheckbox:GetChecked() == 1
+        FRD_Settings.durabilityThreshold = slider1:GetValue()
+        FRD_Settings.autoMode = autoCheckbox:GetChecked() == 1
+        FRD_Settings.checkInterval = slider2:GetValue()
+        FRD_Settings.monitorEnabled = monitorCheckbox:GetChecked() == 1
+        FRD_Settings.monitorInterval = slider3:GetValue()
+        FRD_Settings.monitorShowOOC = monitorOOCCheckbox:GetChecked() == 1
+        FRD_Settings.repairReminderEnabled = repairCheckbox:GetChecked() == 1
 
 
-        if C.autoMode and F.inCombat then
+        if FRD_Settings.autoMode and F.inCombat then
             F:StartAutoCheck()
-        elseif not C.autoMode then
+        elseif not FRD_Settings.autoMode then
             F:StopAutoCheck()
         end
 
@@ -986,13 +986,13 @@ function F:CreateSettingsFrame()
     closeButton:SetText("取消")
     closeButton:SetScript("OnClick", function()
 
-        slider1:SetValue(C.durabilityThreshold)
-        autoCheckbox:SetChecked(C.autoMode)
-        slider2:SetValue(C.checkInterval)
-        monitorCheckbox:SetChecked(C.monitorEnabled)
-        slider3:SetValue(C.monitorInterval or 0.5)
-        monitorOOCCheckbox:SetChecked(C.monitorShowOOC)
-        repairCheckbox:SetChecked(C.repairReminderEnabled)
+        slider1:SetValue(FRD_Settings.durabilityThreshold)
+        autoCheckbox:SetChecked(FRD_Settings.autoMode)
+        slider2:SetValue(FRD_Settings.checkInterval)
+        monitorCheckbox:SetChecked(FRD_Settings.monitorEnabled)
+        slider3:SetValue(FRD_Settings.monitorInterval or 0.5)
+        monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
+        repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
         frame:Hide()
     end)
 
@@ -1024,9 +1024,9 @@ function F:RegisterSlashCommands()
             local disks = F:FindAllDisksInBags()
             DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 背包中找到 " .. table.getn(disks) .. " 个力反馈盾牌")
         elseif lowerMsg == "monitor" or lowerMsg == "mon" then
-            C.monitorEnabled = not C.monitorEnabled
+            FRD_Settings.monitorEnabled = not FRD_Settings.monitorEnabled
             F:UpdateMonitorVisibility(true)
-            if C.monitorEnabled then
+            if FRD_Settings.monitorEnabled then
                 DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 战斗耐久监控: 已启用")
             else
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 战斗耐久监控: 已关闭")
@@ -1034,11 +1034,11 @@ function F:RegisterSlashCommands()
         elseif string.find(lowerMsg, "^monitor%s+") or string.find(lowerMsg, "^mon%s+") then
             local _, _, cmd, action = string.find(lowerMsg, "^(monitor|mon)%s+(%S+)")
             if action == "on" then
-                C.monitorEnabled = true
+                FRD_Settings.monitorEnabled = true
                 F:UpdateMonitorVisibility(true)
                 DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 战斗耐久监控: 已启用")
             elseif action == "off" then
-                C.monitorEnabled = false
+                FRD_Settings.monitorEnabled = false
                 F:UpdateMonitorVisibility(true)
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 战斗耐久监控: 已关闭")
             elseif action == "interval" and cmd and cmd ~= "" then
@@ -1047,16 +1047,16 @@ function F:RegisterSlashCommands()
                 if sec then
                     if sec < 0.1 then sec = 0.1 end
                     if sec > 2.0 then sec = 2.0 end
-                    C.monitorInterval = sec
+                    FRD_Settings.monitorInterval = sec
                     F:UpdateMonitorVisibility(true)
                     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 监控刷新频率: " .. string.format("%.1f", sec) .. " 秒")
                 else
                     DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 用法: /frd monitor interval 0.5")
                 end
             elseif action == "ooc" then
-                C.monitorShowOOC = not C.monitorShowOOC
+                FRD_Settings.monitorShowOOC = not FRD_Settings.monitorShowOOC
                 F:UpdateMonitorVisibility(true)
-                if C.monitorShowOOC then
+                if FRD_Settings.monitorShowOOC then
                     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 脱战也显示监控: 已启用")
                 else
                     DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 脱战也显示监控: 已关闭")
