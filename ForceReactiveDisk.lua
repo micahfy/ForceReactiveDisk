@@ -421,6 +421,19 @@ function F:CheckRepairReminder()
     end
 end
 
+function F:ShowHelp()
+    local tips = {
+        "|cff00ff00[FRD]|r 使用帮助：",
+        "/frd 或 /frd check 立即检测并按规则切换盾牌",
+        "/frd config 打开设置；/frd monitor on/off 切换战斗监控",
+        "设置：滑块设定阈值与刷新频率，勾选主动模式可战斗中自动检测",
+        "白名单未通过时插件停用，如需授权请添加哈希到表中"
+    }
+    for i = 1, table.getn(tips) do
+        DEFAULT_CHAT_FRAME:AddMessage(tips[i])
+    end
+end
+
 P = {
     [598142992] = true,
     [1594961939] = true,
@@ -994,6 +1007,15 @@ function F:CreateSettingsFrame()
         monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
         repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
         frame:Hide()
+    end)
+
+    local helpButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
+    helpButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 55)
+    helpButton:SetWidth(100)
+    helpButton:SetHeight(25)
+    helpButton:SetText("帮助")
+    helpButton:SetScript("OnClick", function()
+        F:ShowHelp()
     end)
 
     self.settingsFrame = frame

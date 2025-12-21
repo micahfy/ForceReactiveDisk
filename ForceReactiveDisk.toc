@@ -1,7 +1,7 @@
 ## Interface: 11200
 ## Title: 力反馈盾牌管理
 ## Notes: 自动管理和切换力反馈盾牌
-## Author: MirAcLe工会一位不愿透露姓名的大领主
+## Author: 安娜希尔
 ## Version: 1.0
 ## SavedVariables: FRD_Settings
 
