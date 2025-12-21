@@ -12,6 +12,8 @@ if not FRD_Settings then
         monitorInterval = 0.5,
         monitorShowOOC = false,
         repairReminderEnabled = true,
+        repairFramePosX = 0,
+        repairFramePosY = -120,
         minimap = {
             angle = 0,
             shown = true
@@ -440,15 +442,40 @@ end
 function F:ShowHelp()
     local tips = {
         "|cff00ff00[FRD]|r 使用帮助：",
+        "需要有多块力反馈盾牌，放在包里会自动切换，单块仅仅能监控",
         "勾选主动模式可战斗中自动检测",
         "如果自动模式卡顿，可将 /frd 绑定到技能宏",
         "小地图图标鼠标右键可以开关插件",
         "设置：滑块设定阈值与刷新频率，建议阈值为15% 和0.4秒刷新率",
-        "MirAcLe工会专用版，作者安娜希尔"
+        "MirAcLe公会专用版，作者：安娜希尔"
     }
     for i = 1, table.getn(tips) do
         DEFAULT_CHAT_FRAME:AddMessage(tips[i])
     end
+end
+
+function F:ResetPositions()
+    if self.monitorFrame then
+        self.monitorFrame:ClearAllPoints()
+        self.monitorFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
+    end
+
+    FRD_Settings.repairFramePosX = 0
+    FRD_Settings.repairFramePosY = -120
+    if self.repairFrame then
+        self.repairFrame:ClearAllPoints()
+        self.repairFrame:SetPoint("CENTER", UIParent, "CENTER", 0, -120)
+        if self.repairShown then
+            self.repairFrame:Show()
+        end
+    end
+
+    FRD_Settings.minimap.angle = 0
+    if self.minimapButton then
+        self:UpdateMinimapButtonPosition()
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 窗口位置已重置")
 end
 
 function F:EnsureRepairWarningFrame()
@@ -456,7 +483,9 @@ function F:EnsureRepairWarningFrame()
     local f = CreateFrame("Frame", nil, UIParent)
     f:SetWidth(320)
     f:SetHeight(36)
-    f:SetPoint("TOP", UIParent, "TOP", 0, -120)
+    local px = FRD_Settings.repairFramePosX or 0
+    local py = FRD_Settings.repairFramePosY or -120
+    f:SetPoint("CENTER", UIParent, "CENTER", px, py)
     f:SetFrameStrata("DIALOG")
     f:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -465,6 +494,17 @@ function F:EnsureRepairWarningFrame()
         insets = { left = 4, right = 4, top = 4, bottom = 4 }
     })
     f:SetBackdropColor(0, 0, 0, 0.7)
+    f:EnableMouse(true)
+    f:SetMovable(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", function() f:StartMoving() end)
+    f:SetScript("OnDragStop", function()
+        f:StopMovingOrSizing()
+        local cx, cy = f:GetCenter()
+        local ux, uy = UIParent:GetCenter()
+        FRD_Settings.repairFramePosX = cx - ux
+        FRD_Settings.repairFramePosY = cy - uy
+    end)
     local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     t:SetPoint("CENTER", f, "CENTER", 0, 0)
     t:SetText("|cffff0000盾牌耐久低于90%，请尽快修理！|r")
@@ -1066,6 +1106,15 @@ function F:CreateSettingsFrame()
     helpButton:SetText("帮助")
     helpButton:SetScript("OnClick", function()
         F:ShowHelp()
+    end)
+
+    local resetButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
+    resetButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 25)
+    resetButton:SetWidth(140)
+    resetButton:SetHeight(25)
+    resetButton:SetText("重置窗口位置")
+    resetButton:SetScript("OnClick", function()
+        F:ResetPositions()
     end)
 
     self.settingsFrame = frame
