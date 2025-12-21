@@ -33,6 +33,7 @@ F.timeSinceLastCheck = 0
 F.inCombat = false
 F.warnedAllBelowTwo = false
 F.authWarningShown = false
+F.repairShown = false
 
 
 local function H(str)
@@ -111,6 +112,7 @@ F:SetScript("OnEvent", function()
         F:UpdateMonitorVisibility(true)
     elseif event == "PLAYER_REGEN_DISABLED" then
         F.inCombat = true
+        F:HideRepairWarning()
         if FRD_Settings.autoMode and FRD_Settings.enabled then
             F:StartAutoCheck()
         end
@@ -123,9 +125,15 @@ F:SetScript("OnEvent", function()
         F:CheckRepairReminder()
     elseif event == "BAG_UPDATE" or event == "UPDATE_INVENTORY_ALERTS" then
         F:UpdateMonitorText(false)
+        if not F.inCombat then
+            F:CheckRepairReminder()
+        end
     elseif event == "UNIT_INVENTORY_CHANGED" then
         if arg1 == "player" then
             F:UpdateMonitorText(false)
+            if not F.inCombat then
+                F:CheckRepairReminder()
+            end
         end
     end
 end)
@@ -392,6 +400,7 @@ end
 
 function F:CheckRepairReminder()
     if not FRD_Settings.repairReminderEnabled then
+        self:HideRepairWarning()
         return
     end
 
@@ -416,8 +425,15 @@ function F:CheckRepairReminder()
     end
 
     if needRepair then
-        UIErrorsFrame:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！", 1, 0, 0, 1)
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！")
+        if not self.repairShown then
+            UIErrorsFrame:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！", 1, 0, 0, 1)
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！")
+        end
+        self.repairShown = true
+        self:ShowRepairWarning()
+    else
+        self.repairShown = false
+        self:HideRepairWarning()
     end
 end
 
@@ -432,6 +448,39 @@ function F:ShowHelp()
     }
     for i = 1, table.getn(tips) do
         DEFAULT_CHAT_FRAME:AddMessage(tips[i])
+    end
+end
+
+function F:EnsureRepairWarningFrame()
+    if self.repairFrame then return end
+    local f = CreateFrame("Frame", nil, UIParent)
+    f:SetWidth(320)
+    f:SetHeight(36)
+    f:SetPoint("TOP", UIParent, "TOP", 0, -120)
+    f:SetFrameStrata("DIALOG")
+    f:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    f:SetBackdropColor(0, 0, 0, 0.7)
+    local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    t:SetPoint("CENTER", f, "CENTER", 0, 0)
+    t:SetText("|cffff0000盾牌耐久低于90%，请尽快修理！|r")
+    self.repairFrame = f
+end
+
+function F:ShowRepairWarning()
+    self:EnsureRepairWarningFrame()
+    if self.repairFrame then
+        self.repairFrame:Show()
+    end
+end
+
+function F:HideRepairWarning()
+    if self.repairFrame then
+        self.repairFrame:Hide()
     end
 end
 
