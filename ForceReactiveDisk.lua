@@ -937,6 +937,60 @@ function FRD:CreateSettingsFrame()
         repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
         frame:Hide()
     end)
+
+    -- 帮助按钮
+    local helpButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
+    helpButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 55)
+    helpButton:SetWidth(100)
+    helpButton:SetHeight(22)
+    helpButton:SetText("帮助")
+
+    -- 帮助内容框
+    local helpFrame = CreateFrame("Frame", "FRDHelpFrame", frame)
+    helpFrame:SetWidth(320)
+    helpFrame:SetHeight(200)
+    helpFrame:SetPoint("CENTER", frame, "CENTER", 0, 20)
+    helpFrame:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+    helpFrame:Hide()
+
+    local helpTitle = helpFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    helpTitle:SetPoint("TOP", helpFrame, "TOP", 0, -18)
+    helpTitle:SetText("帮助信息")
+
+    local helpText = helpFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    helpText:SetPoint("TOPLEFT", helpFrame, "TOPLEFT", 16, -46)
+    helpText:SetWidth(288)
+    helpText:SetJustifyH("LEFT")
+    helpText:SetText(table.concat({
+        "需要有多块力反馈盾牌，放在包里会自动切换，单块仅仅能监控",
+        "勾选主动模式可战斗中自动检测",
+        "如果自动模式卡顿，可将 /frd 绑定到技能宏",
+        "小地图图标鼠标右键可以开关插件",
+        "设置：滑块设定阈值与刷新频率，建议阈值为15% 和0.4秒刷新率",
+        "作者：安娜希尔"
+    }, "\n"))
+
+    local helpClose = CreateFrame("Button", nil, helpFrame, "GameMenuButtonTemplate")
+    helpClose:SetPoint("BOTTOM", helpFrame, "BOTTOM", 0, 16)
+    helpClose:SetWidth(90)
+    helpClose:SetHeight(22)
+    helpClose:SetText("关闭")
+    helpClose:SetScript("OnClick", function()
+        helpFrame:Hide()
+    end)
+
+    helpButton:SetScript("OnClick", function()
+        if helpFrame:IsShown() then
+            helpFrame:Hide()
+        else
+            helpFrame:Show()
+        end
+    end)
     
     self.settingsFrame = frame
 end
