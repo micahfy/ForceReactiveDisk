@@ -48,25 +48,7 @@ local function H(str)
 end
 
 function F:X(showWarning)
-    local name = UnitName("player") or ""
-    local guildName = GetGuildInfo("player") or ""
-
-    local playerHash = H(N .. "P:" .. name)
-    local guildHash = nil
-    if guildName ~= "" then
-        guildHash = H(N .. "G:" .. guildName)
-    end
-
-    local ok = P[playerHash] == true
-    if not ok and guildHash then
-        ok = Q[guildHash] == true
-    end
-
-    if not ok and showWarning and not self.authWarningShown then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 需要请联系开发者")
-        self.authWarningShown = true
-    end
-    return ok
+    return true
 end
 
 F:SetScript("OnEvent", function()
@@ -447,7 +429,7 @@ function F:ShowHelp()
         "如果自动模式卡顿，可将 /frd 绑定到技能宏",
         "小地图图标鼠标右键可以开关插件",
         "设置：滑块设定阈值与刷新频率，建议阈值为15% 和0.4秒刷新率",
-        "MirAcLe公会专用版，作者：安娜希尔"
+        "作者：安娜希尔"
     }
     for i = 1, table.getn(tips) do
         DEFAULT_CHAT_FRAME:AddMessage(tips[i])
