@@ -543,9 +543,10 @@ function FRD:CheckAndSwapDisk(silent)
     if bestDurability > maxDurability then
         maxDurability = bestDurability
     end
+    local allBelowThreshold = (currentDurability < threshold) and (bestDurability < threshold) -- 只有当所有盾牌都低于阈值时才启用2%紧急逻辑
 
     -- 所有盾牌都低于2%时，一次性提醒并按残余耐久依次用尽
-    if maxDurability <= 2 then
+    if allBelowThreshold and maxDurability <= 2 then
         if not self.warnedAllBelowTwo then
             UIErrorsFrame:AddMessage("|cffff0000[FRD]|r 所有力反馈盾牌耐久低于2%，即将损毁!", 1, 0.2, 0.2, 1)
             if not silent then
@@ -566,7 +567,6 @@ function FRD:CheckAndSwapDisk(silent)
     end
 
     if currentDurability < threshold then
-        local allBelowThreshold = bestDurability < threshold
 
         -- 所有盾牌都低于阈值时，使用“低于2%再切”的紧急逻辑
         if allBelowThreshold then
