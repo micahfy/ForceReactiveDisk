@@ -408,7 +408,6 @@ function FRD:CheckRepairReminder()
         if not self.inCombat then
             self:ShowRepairReminder()
         end
-        UIErrorsFrame:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！", 1, 0, 0, 1)
     else
         self:HideRepairReminder()
     end
@@ -1032,6 +1031,16 @@ function FRD:CreateSettingsFrame()
     helpButton:SetWidth(100)
     helpButton:SetHeight(22)
     helpButton:SetText("帮助")
+
+    -- 重置位置按钮
+    local resetPosButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
+    resetPosButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 85)
+    resetPosButton:SetWidth(120)
+    resetPosButton:SetHeight(22)
+    resetPosButton:SetText("重置窗口位置")
+    resetPosButton:SetScript("OnClick", function()
+        FRD:ResetFramePositions()
+    end)
 
     -- 帮助内容框
     local helpFrame = CreateFrame("Frame", "FRDHelpFrame", frame)
