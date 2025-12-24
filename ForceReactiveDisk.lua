@@ -1086,12 +1086,30 @@ function FRD:CreateSettingsFrame()
     helpText:SetWidth(288)
     helpText:SetJustifyH("LEFT")
     helpText:SetText(table.concat({
-        "需要有多块力反馈盾牌，放在包里会自动切换，单块仅仅能监控",
-        "勾选主动模式可战斗中自动检测",
-        "如果自动模式卡顿，可将 /frd 绑定到技能宏",
-        "小地图图标鼠标右键可以开关插件",
-        "设置：滑块设定阈值与刷新频率，建议阈值为15% 和0.4秒刷新率",
-        "作者：安娜希尔"
+        "插件功能简介",
+        "· 自动切换力反馈盾牌（需背包有多块）；单块仅监控，不自动切换。",
+        "· 勾选主动模式：战斗中自动检测并切换盾牌。",
+        "· 如果不希望主动侦测，或者自动模式遇到使用问题，可将 /frd 绑定技能宏触发检测。",
+        "· 小地图图标：右键可切换插件开关。",
+        "",
+        "设置建议",
+        "· 阈值：建议 15%。",
+        "· 刷新频率：建议 0.4 秒。",
+        "",
+        "作者信息",
+        "· 作者：安娜希尔",
+        "",
+        "命令使用说明",
+        "· /frd on            启用插件",
+        "· /frd off           停用插件",
+        "· /frd               被动模式：按逻辑检测并切换，可绑定宏",
+        "· /frd config        打开设置界面",
+        "· /frd reset         重置监控与修理提醒位置",
+        "· /frd status        显示副手状态与背包盾牌数量",
+        "· /frd monitor|mon   切换战斗耐久监控开/关",
+        "· /frd monitor on|off   显式打开/关闭监控",
+        "· /frd monitor interval <秒>  (0.1–2.0) 设置刷新频率",
+        "· /frd monitor ooc   切换脱战显示监控"
     }, "\n"))
 
     local helpClose = CreateFrame("Button", nil, helpFrame, "GameMenuButtonTemplate")
@@ -1125,6 +1143,22 @@ function FRD:RegisterSlashCommands()
             FRD:CheckAndSwapDisk()
         elseif msg == "config" or msg == "settings" then
             FRDSettingsFrame:Show()
+        elseif lowerMsg == "on" then
+            FRD_Settings.enabled = true
+            FRD:UpdateMonitorVisibility(true)
+            FRD:UpdateMinimapIconState()
+            if FRD_Settings.autoMode and FRD.inCombat then
+                FRD:StartAutoCheck()
+            end
+            FRD:CheckRepairReminder()
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
+        elseif lowerMsg == "off" then
+            FRD_Settings.enabled = false
+            FRD:StopAutoCheck()
+            FRD:UpdateMonitorVisibility(true)
+            FRD:HideRepairReminder()
+            FRD:UpdateMinimapIconState()
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
         elseif msg == "reset" or msg == "resetpos" then
             FRD:ResetFramePositions()
         elseif msg == "status" then
