@@ -738,9 +738,10 @@ function FRD:CreateMinimapButton()
     button.disabledOverlay = disabledOverlay
     
     button:SetScript("OnClick", function(_, mouseButton)
-        if mouseButton == "LeftButton" then
+        local btn = mouseButton or arg1 -- 兼容旧环境的全局arg1
+        if btn == "LeftButton" then
             FRDSettingsFrame:Show()
-        elseif mouseButton == "RightButton" then
+        elseif btn == "RightButton" then
             FRD_Settings.enabled = not FRD_Settings.enabled
             if FRD_Settings.enabled then
                 DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
