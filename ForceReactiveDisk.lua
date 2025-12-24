@@ -379,7 +379,7 @@ end
 
 -- 脱战后低耐久提醒
 function FRD:CheckRepairReminder()
-    if not FRD_Settings.repairReminderEnabled then
+    if not FRD_Settings.enabled or not FRD_Settings.repairReminderEnabled then
         self:HideRepairReminder()
         return
     end
@@ -737,6 +737,7 @@ function FRD:CreateMinimapButton()
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
                 FRD:StopAutoCheck()
                 FRD:UpdateMonitorVisibility(true)
+                FRD:HideRepairReminder()
             end
             FRD:UpdateMinimapIconState()
         end
