@@ -723,7 +723,7 @@ function FRD:CreateMinimapButton()
     icon:SetWidth(26)
     icon:SetHeight(26)
     icon:SetPoint("CENTER", 0, 1)
-    icon:SetTexture("Interface\\Icons\\INV_Shield_02") -- 盾牌图标
+    icon:SetTexture("Interface\\Icons\\Spell_Arcane_PortalDarnassus")        -- 使用力反馈盾牌对应的法术图标
     button.icon = icon
 
     local disabledOverlay = button:CreateTexture("FRDMinimapDisabledOverlay", "ARTWORK")
