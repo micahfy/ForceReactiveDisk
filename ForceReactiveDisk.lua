@@ -1041,14 +1041,14 @@ function FRD:CreateSettingsFrame()
 
     -- 帮助按钮
     local helpButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
-    helpButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 55)
+    helpButton:SetPoint("BOTTOM", frame, "BOTTOM", 60, 60)
     helpButton:SetWidth(100)
     helpButton:SetHeight(22)
     helpButton:SetText("帮助")
 
-    -- 重置位置按钮
+    -- 重置位置按钮（与帮助同一行）
     local resetPosButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
-    resetPosButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 85)
+    resetPosButton:SetPoint("BOTTOM", frame, "BOTTOM", -60, 60)
     resetPosButton:SetWidth(120)
     resetPosButton:SetHeight(22)
     resetPosButton:SetText("重置窗口位置")
@@ -1058,8 +1058,8 @@ function FRD:CreateSettingsFrame()
 
     -- 帮助内容框
     local helpFrame = CreateFrame("Frame", "FRDHelpFrame", frame)
-    helpFrame:SetWidth(320)
-    helpFrame:SetHeight(220)
+    helpFrame:SetWidth(380)
+    helpFrame:SetHeight(260)
     -- 将帮助窗口放在设置框右侧，避免遮挡功能区
     helpFrame:ClearAllPoints()
     helpFrame:SetPoint("TOPLEFT", frame, "TOPRIGHT", 12, 0)
@@ -1077,7 +1077,7 @@ function FRD:CreateSettingsFrame()
 
     local helpText = helpFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     helpText:SetPoint("TOPLEFT", helpFrame, "TOPLEFT", 16, -46)
-    helpText:SetWidth(288)
+    helpText:SetWidth(340)
     helpText:SetJustifyH("LEFT")
     helpText:SetText(table.concat({
         "插件功能简介",
