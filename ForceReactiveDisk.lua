@@ -709,10 +709,10 @@ function FRD:CreateMinimapButton()
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
     
     local icon = button:CreateTexture("FRDMinimapIcon", "BACKGROUND")
-    icon:SetWidth(20)
-    icon:SetHeight(20)
+    icon:SetWidth(26)
+    icon:SetHeight(26)
     icon:SetPoint("CENTER", 0, 1)
-    icon:SetTexture("Interface\\Icons\\INV_Shield_21") -- 盾牌图标
+    icon:SetTexture("Interface\\Icons\\INV_Shield_02") -- 盾牌图标
     button.icon = icon
 
     local disabledOverlay = button:CreateTexture("FRDMinimapDisabledOverlay", "ARTWORK")
