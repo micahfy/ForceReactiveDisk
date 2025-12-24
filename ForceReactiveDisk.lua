@@ -63,6 +63,9 @@ FRD:SetScript("OnEvent", function()
         if FRD_Settings.repairReminderEnabled == nil then
             FRD_Settings.repairReminderEnabled = true
         end
+        if not FRD_Settings.repairReminderPosition then
+            FRD_Settings.repairReminderPosition = { point = "TOP", relativePoint = "TOP", x = 0, y = -120 }
+        end
         if not FRD_Settings.minimap then
             FRD_Settings.minimap = { angle = 0, shown = true }
         end
@@ -71,6 +74,7 @@ FRD:SetScript("OnEvent", function()
         FRD:UpdateMonitorVisibility(true)
     elseif event == "PLAYER_REGEN_DISABLED" then
         FRD.inCombat = true
+        FRD:HideRepairReminder()
         if FRD_Settings.autoMode and FRD_Settings.enabled then
             FRD:StartAutoCheck()
         end
@@ -83,9 +87,11 @@ FRD:SetScript("OnEvent", function()
         FRD:CheckRepairReminder()
     elseif event == "BAG_UPDATE" or event == "UPDATE_INVENTORY_ALERTS" then
         FRD:UpdateMonitorText(false)
+        FRD:CheckRepairReminder()
     elseif event == "UNIT_INVENTORY_CHANGED" then
         if arg1 == "player" then
             FRD:UpdateMonitorText(false)
+            FRD:CheckRepairReminder()
         end
     end
 end)
@@ -352,6 +358,7 @@ end
 -- 脱战后低耐久提醒
 function FRD:CheckRepairReminder()
     if not FRD_Settings.repairReminderEnabled then
+        self:HideRepairReminder()
         return
     end
 
@@ -376,8 +383,68 @@ function FRD:CheckRepairReminder()
     end
 
     if needRepair then
+        if not self.inCombat then
+            self:ShowRepairReminder()
+        end
         UIErrorsFrame:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！", 1, 0, 0, 1)
         DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！")
+    else
+        self:HideRepairReminder()
+    end
+end
+
+function FRD:EnsureRepairReminderFrame()
+    if self.repairReminderFrame then
+        return
+    end
+    local frame = CreateFrame("Frame", "FRDRepairReminderFrame", UIParent)
+    frame:SetWidth(400)
+    frame:SetHeight(50)
+    local pos = FRD_Settings.repairReminderPosition or { point = "TOP", relativePoint = "TOP", x = 0, y = -120 }
+    frame:SetPoint(pos.point or "TOP", UIParent, pos.relativePoint or pos.point or "TOP", pos.x or 0, pos.y or -120)
+    frame:SetFrameStrata("HIGH")
+    frame:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 24,
+        insets = { left = 8, right = 8, top = 8, bottom = 8 }
+    })
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:SetClampedToScreen(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function()
+        this:StartMoving()
+    end)
+    frame:SetScript("OnDragStop", function()
+        this:StopMovingOrSizing()
+        local point, _, relativePoint, xOfs, yOfs = this:GetPoint()
+        FRD_Settings.repairReminderPosition = {
+            point = point or "TOP",
+            relativePoint = relativePoint or point or "TOP",
+            x = xOfs or 0,
+            y = yOfs or -120
+        }
+    end)
+
+    local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    text:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    text:SetText("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！")
+    frame.text = text
+    frame:Hide()
+    self.repairReminderFrame = frame
+end
+
+function FRD:ShowRepairReminder()
+    self:EnsureRepairReminderFrame()
+    if self.repairReminderFrame then
+        self.repairReminderFrame:Show()
+    end
+end
+
+function FRD:HideRepairReminder()
+    if self.repairReminderFrame then
+        self.repairReminderFrame:Hide()
     end
 end
 
