@@ -733,12 +733,6 @@ function FRD:CreateMinimapButton()
     disabledOverlay:Hide()
     button.disabledOverlay = disabledOverlay
     
-    local overlay = button:CreateTexture(nil, "OVERLAY")
-    overlay:SetWidth(52)
-    overlay:SetHeight(52)
-    overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-    overlay:SetPoint("TOPLEFT", 0, 0)
-    
     button:SetScript("OnClick", function()
         if arg1 == "LeftButton" then
             FRDSettingsFrame:Show()
