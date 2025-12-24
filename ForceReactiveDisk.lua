@@ -283,7 +283,9 @@ function FRD:UpdateMonitorText(force)
                 label = "包" .. d.bag .. "槽" .. d.slot,
                 durability = d.durability,
                 texture = texture,
-                equipped = false
+                equipped = false,
+                bag = d.bag,
+                slot = d.slot
             })
         end
     end
@@ -325,9 +327,10 @@ function FRD:UpdateMonitorText(force)
         local entry = entries[i]
         local iconFrame = self.monitorFrame.icons[i]
         if not iconFrame then
-            iconFrame = CreateFrame("Frame", nil, self.monitorFrame.iconContainer)
+            iconFrame = CreateFrame("Button", nil, self.monitorFrame.iconContainer)
             iconFrame:SetWidth(iconSize)
             iconFrame:SetHeight(iconSize + 14)
+            iconFrame:RegisterForClicks("LeftButtonUp")
 
             iconFrame.bg = iconFrame:CreateTexture(nil, "BACKGROUND")
             iconFrame.bg:SetAllPoints()
@@ -342,6 +345,12 @@ function FRD:UpdateMonitorText(force)
             iconFrame.text:SetPoint("TOP", iconFrame.icon, "BOTTOM", 0, -2)
             iconFrame.text:SetText("")
 
+            iconFrame:SetScript("OnClick", function()
+                if this.bag and this.slot then
+                    FRD:EquipDisk(this.bag, this.slot)
+                end
+            end)
+
             self.monitorFrame.icons[i] = iconFrame
         end
 
@@ -352,6 +361,8 @@ function FRD:UpdateMonitorText(force)
         iconFrame.icon:SetTexture(entry.texture)
         local colorCode = self:FormatDurabilityColor(entry.durability)
         iconFrame.text:SetText(colorCode .. string.format("%.0f", entry.durability) .. "%|r")
+        iconFrame.bag = entry.bag
+        iconFrame.slot = entry.slot
 
         if entry.equipped then
             iconFrame.bg:SetTexture(0, 0.5, 0, 0.5)
