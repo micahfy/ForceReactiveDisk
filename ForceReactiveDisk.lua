@@ -720,6 +720,7 @@ function FRD:CreateMinimapButton()
     button:SetFrameStrata("MEDIUM")
     button:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 52, -52)
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+    button:RegisterForClicks("AnyUp")
     
     local icon = button:CreateTexture("FRDMinimapIcon", "BACKGROUND")
     icon:SetWidth(26)
@@ -737,28 +738,30 @@ function FRD:CreateMinimapButton()
     disabledOverlay:Hide()
     button.disabledOverlay = disabledOverlay
     
-    button:SetScript("OnClick", function(_, mouseButton)
-        local btn = mouseButton or arg1 -- 兼容旧环境的全局arg1
+    button:SetScript("OnClick", function(self, mouseButton)
+        local btn = mouseButton or arg1 -- 兼容旧环境
         if btn == "LeftButton" then
             FRDSettingsFrame:Show()
-        elseif btn == "RightButton" then
-            FRD_Settings.enabled = not FRD_Settings.enabled
-            if FRD_Settings.enabled then
-                DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
-                FRD:UpdateMonitorVisibility(true)
-                if FRD_Settings.autoMode and FRD.inCombat then
-                    FRD:StartAutoCheck()
-                end
-                -- 刚启用时立即检查修理提醒
-                FRD:CheckRepairReminder()
-            else
-                DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
-                FRD:StopAutoCheck()
-                FRD:UpdateMonitorVisibility(true)
-                FRD:HideRepairReminder()
-            end
-            FRD:UpdateMinimapIconState()
+            return
         end
+        if btn ~= "RightButton" then
+            return
+        end
+        FRD_Settings.enabled = not FRD_Settings.enabled
+        if FRD_Settings.enabled then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
+            FRD:UpdateMonitorVisibility(true)
+            if FRD_Settings.autoMode and FRD.inCombat then
+                FRD:StartAutoCheck()
+            end
+            FRD:CheckRepairReminder()
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
+            FRD:StopAutoCheck()
+            FRD:UpdateMonitorVisibility(true)
+            FRD:HideRepairReminder()
+        end
+        FRD:UpdateMinimapIconState()
     end)
     
     button:SetScript("OnEnter", function()
