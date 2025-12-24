@@ -733,6 +733,8 @@ function FRD:CreateMinimapButton()
                 if FRD_Settings.autoMode and FRD.inCombat then
                     FRD:StartAutoCheck()
                 end
+                -- 刚启用时立即检查修理提醒
+                FRD:CheckRepairReminder()
             else
                 DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
                 FRD:StopAutoCheck()
