@@ -903,15 +903,15 @@ function FRD:CreateSettingsFrame()
     -- 检测频率滑块
     local slider2 = CreateFrame("Slider", "FRDIntervalSlider", frame, "OptionsSliderTemplate")
     slider2:SetPoint("TOP", frame, "TOP", 0, -210)
-    slider2:SetMinMaxValues(0.2, 10)
-    slider2:SetValueStep(0.2)
+    slider2:SetMinMaxValues(0.1, 10)
+    slider2:SetValueStep(0.1)
     slider2:SetWidth(250)
-    getglobal(slider2:GetName() .. "Low"):SetText("0.2秒")
+    getglobal(slider2:GetName() .. "Low"):SetText("0.1秒")
     getglobal(slider2:GetName() .. "High"):SetText("10秒")
     
     -- 确保值在有效范围内
     local intervalValue = FRD_Settings.checkInterval or 2.0
-    if intervalValue < 0.2 then intervalValue = 0.2 end
+    if intervalValue < 0.1 then intervalValue = 0.1 end
     if intervalValue > 10 then intervalValue = 10 end
     
     slider2:SetValue(intervalValue)
