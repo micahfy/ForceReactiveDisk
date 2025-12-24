@@ -715,15 +715,6 @@ function FRD:CreateMinimapButton()
     icon:SetTexture("Interface\\Icons\\INV_Shield_21") -- 盾牌图标
     button.icon = icon
 
-    local enabledOverlay = button:CreateTexture("FRDMinimapEnabledOverlay", "ARTWORK")
-    enabledOverlay:SetWidth(36)
-    enabledOverlay:SetHeight(36)
-    enabledOverlay:SetPoint("CENTER", button, "CENTER", 0, 0)
-    enabledOverlay:SetTexture("Interface\\Buttons\\CheckButtonHilight")
-    enabledOverlay:SetBlendMode("ADD")
-    enabledOverlay:SetVertexColor(0, 1, 0, 0.6) -- 绿色高亮
-    button.enabledOverlay = enabledOverlay
-
     local disabledOverlay = button:CreateTexture("FRDMinimapDisabledOverlay", "ARTWORK")
     disabledOverlay:SetWidth(32)
     disabledOverlay:SetHeight(32)
@@ -818,19 +809,16 @@ function FRD:UpdateMinimapIconState()
         return
     end
     local icon = self.minimapButton.icon
-    local onOverlay = self.minimapButton.enabledOverlay
     local offOverlay = self.minimapButton.disabledOverlay
     if not icon then return end
 
     if FRD_Settings.enabled then
         icon:SetDesaturated(false)
         icon:SetVertexColor(1, 1, 1, 1)
-        if onOverlay then onOverlay:Show() end
         if offOverlay then offOverlay:Hide() end
     else
         icon:SetDesaturated(true)
         icon:SetVertexColor(0.4, 0.4, 0.4, 0.8)
-        if onOverlay then onOverlay:Hide() end
         if offOverlay then offOverlay:Show() end
     end
 end
@@ -1059,7 +1047,7 @@ function FRD:CreateSettingsFrame()
     -- 帮助内容框
     local helpFrame = CreateFrame("Frame", "FRDHelpFrame", frame)
     helpFrame:SetWidth(380)
-    helpFrame:SetHeight(260)
+    helpFrame:SetHeight(480)
     -- 将帮助窗口放在设置框右侧，避免遮挡功能区
     helpFrame:ClearAllPoints()
     helpFrame:SetPoint("TOPLEFT", frame, "TOPRIGHT", 12, 0)
@@ -1086,12 +1074,11 @@ function FRD:CreateSettingsFrame()
         "· 如果不希望主动侦测，或者自动模式遇到使用问题，可将 /frd 绑定技能宏触发检测。",
         "· 小地图图标：右键可切换插件开关。",
         "",
+        "· 作者：安娜希尔",
+        "",
         "设置建议",
         "· 阈值：建议 15%。",
         "· 刷新频率：建议 0.4 秒。",
-        "",
-        "作者信息",
-        "· 作者：安娜希尔",
         "",
         "命令使用说明",
         "· /frd on            启用插件",
