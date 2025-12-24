@@ -1159,6 +1159,17 @@ function FRD:RegisterSlashCommands()
             FRD:HideRepairReminder()
             FRD:UpdateMinimapIconState()
             DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
+        elseif lowerMsg == "help" then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 命令清单：")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd 或 /frd check - 检测并切换盾牌（被动模式，可绑定宏）")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd on / off - 启用/停用插件")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd config - 打开设置界面")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd reset - 重置监控和修理提醒位置")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd status - 显示副手状态与背包盾牌数量")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd monitor (mon) - 切换战斗耐久监控")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd monitor on|off - 显式开关监控")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd monitor interval <0.1-2.0> - 设置监控刷新频率")
+            DEFAULT_CHAT_FRAME:AddMessage("/frd monitor ooc - 切换脱战显示监控")
         elseif msg == "reset" or msg == "resetpos" then
             FRD:ResetFramePositions()
         elseif msg == "status" then
