@@ -150,6 +150,7 @@ function FRD:CreateMonitorFrame()
 
     frame:EnableMouse(true)
     frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function() this:StartMoving() end)
     frame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
@@ -355,6 +356,27 @@ function FRD:UpdateMonitorText(force)
     self.monitorFrame:SetHeight(frameHeight)
 end
 
+-- 重置可拖动小窗位置（监控与修理提示）
+function FRD:ResetFramePositions()
+    -- 监控小窗
+    if not self.monitorFrame then
+        self:CreateMonitorFrame()
+    end
+    if self.monitorFrame then
+        self.monitorFrame:ClearAllPoints()
+        self.monitorFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
+    end
+
+    -- 修理提醒
+    FRD_Settings.repairReminderPosition = { point = "TOP", relativePoint = "TOP", x = 0, y = -120 }
+    if self.repairReminderFrame then
+        self.repairReminderFrame:ClearAllPoints()
+        self.repairReminderFrame:SetPoint("TOP", UIParent, "TOP", 0, -120)
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 小窗口位置已重置")
+end
+
 -- 脱战后低耐久提醒
 function FRD:CheckRepairReminder()
     if not FRD_Settings.repairReminderEnabled then
@@ -387,7 +409,6 @@ function FRD:CheckRepairReminder()
             self:ShowRepairReminder()
         end
         UIErrorsFrame:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！", 1, 0, 0, 1)
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 盾牌耐久低于90%，请尽快修理！")
     else
         self:HideRepairReminder()
     end
@@ -1073,6 +1094,8 @@ function FRD:RegisterSlashCommands()
             FRD:CheckAndSwapDisk()
         elseif msg == "config" or msg == "settings" then
             FRDSettingsFrame:Show()
+        elseif msg == "reset" or msg == "resetpos" then
+            FRD:ResetFramePositions()
         elseif msg == "status" then
             local isEquipped = FRD:IsOffhandForceReactiveDisk()
             if isEquipped then
