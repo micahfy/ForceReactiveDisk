@@ -2,6 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
+local FRD_VERSION = 1.68
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -39,6 +40,7 @@ FRD:SetScript("OnEvent", function()
         if not FRD_Settings then
             FRD_Settings = {}
         end
+        local oldVersion = FRD_Settings.version or 0
         if not FRD_Settings.durabilityThreshold then
             FRD_Settings.durabilityThreshold = 30
         end
@@ -69,6 +71,10 @@ FRD:SetScript("OnEvent", function()
         if not FRD_Settings.minimap then
             FRD_Settings.minimap = { angle = 0, shown = true }
         end
+        if oldVersion < FRD_VERSION then
+            FRD:MigrateSettings(oldVersion)
+        end
+        FRD_Settings.version = FRD_VERSION
         FRD:Initialize()
     elseif event == "PLAYER_ENTERING_WORLD" then
         FRD:UpdateMonitorVisibility(true)
@@ -95,6 +101,17 @@ FRD:SetScript("OnEvent", function()
         end
     end
 end)
+
+-- 配置迁移（基于版本号）
+function FRD:MigrateSettings(oldVersion)
+    -- 示例：补齐新字段或矫正旧数据
+    if oldVersion < 1.68 then
+        -- 确保修理提醒位置存在
+        if not FRD_Settings.repairReminderPosition then
+            FRD_Settings.repairReminderPosition = { point = "TOP", relativePoint = "TOP", x = 0, y = -120 }
+        end
+    end
+end
 
 -- 初始化
 function FRD:Initialize()
