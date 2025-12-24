@@ -1048,8 +1048,10 @@ function FRD:CreateSettingsFrame()
     -- 帮助内容框
     local helpFrame = CreateFrame("Frame", "FRDHelpFrame", frame)
     helpFrame:SetWidth(320)
-    helpFrame:SetHeight(200)
-    helpFrame:SetPoint("CENTER", frame, "CENTER", 0, 20)
+    helpFrame:SetHeight(220)
+    -- 将帮助窗口放在设置框右侧，避免遮挡功能区
+    helpFrame:ClearAllPoints()
+    helpFrame:SetPoint("TOPLEFT", frame, "TOPRIGHT", 12, 0)
     helpFrame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
