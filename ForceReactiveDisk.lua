@@ -72,6 +72,8 @@ FRD:SetScript("OnEvent", function()
             FRD_Settings.minimap = { angle = 0, shown = true }
         end
         if oldVersion < FRD_VERSION then
+            -- 版本迁移时默认确保插件启用
+            FRD_Settings.enabled = true
             FRD:MigrateSettings(oldVersion)
         end
         FRD_Settings.version = FRD_VERSION
