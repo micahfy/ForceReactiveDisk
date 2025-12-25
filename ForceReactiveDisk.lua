@@ -36,6 +36,7 @@ FRD.timeSinceLastCheck = 0
 FRD.inCombat = false
 FRD.warnedAllBelowTwo = false
 FRD.warnedEconomyShieldMissing = false
+FRD.economyShieldLockedInCombat = false
 
 FRD:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
@@ -94,6 +95,7 @@ FRD:SetScript("OnEvent", function()
         FRD:UpdateMonitorVisibility(true)
     elseif event == "PLAYER_REGEN_DISABLED" then
         FRD.inCombat = true
+        FRD.economyShieldLockedInCombat = false
         FRD:HideRepairReminder()
         if FRD_Settings.autoMode and FRD_Settings.enabled then
             FRD:StartAutoCheck()
@@ -105,6 +107,7 @@ FRD:SetScript("OnEvent", function()
         FRD:UpdateMinimapIconState()
     elseif event == "PLAYER_REGEN_ENABLED" then
         FRD.inCombat = false
+        FRD.economyShieldLockedInCombat = false
         FRD:StopAutoCheck()
         if FRD_Settings.autoMode and FRD_Settings.enabled and FRD_Settings.economyShieldEnabled then
             FRD:CheckAndSwapDisk(true)
@@ -841,10 +844,17 @@ function FRD:HandleEconomyShieldSwap(silent)
     end
 
     if self.inCombat then
+        if self.economyShieldLockedInCombat then
+            return false
+        end
         local threshold = FRD_Settings.economyShieldThreshold or 50
         if threshold < 1 then threshold = 1 end
         if threshold > 100 then threshold = 100 end
         local healthPercent = self:GetPlayerHealthPercent()
+        if healthPercent <= threshold then
+            self.economyShieldLockedInCombat = true
+            return false
+        end
         if healthPercent > threshold then
             if self:EquipEconomyShield(silent) then
                 return true
