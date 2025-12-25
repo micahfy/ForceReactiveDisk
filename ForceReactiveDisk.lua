@@ -149,6 +149,8 @@ function FRD:Initialize()
     self:CreateSettingsFrame()
     -- 创建耐久监控UI
     self:CreateMonitorFrame()
+    -- 兼容旧版本光标API
+    self:HookCursorPickup()
     -- 注册斜杠命令
     self:RegisterSlashCommands()
     
@@ -661,6 +663,66 @@ function FRD:GetEconomyShieldItemId()
         FRD_Settings.economyShieldItemId = itemId
         return itemId
     end
+    return nil
+end
+
+-- 旧版本兼容：记录光标物品信息
+function FRD:HookCursorPickup()
+    if self.cursorHooked then
+        return
+    end
+    self.cursorHooked = true
+
+    if PickupContainerItem and not self.originalPickupContainerItem then
+        self.originalPickupContainerItem = PickupContainerItem
+        PickupContainerItem = function(bag, slot)
+            if FRD then
+                FRD.cursorItemLink = GetContainerItemLink(bag, slot)
+                FRD.cursorItemId = FRD:GetItemIdFromLink(FRD.cursorItemLink)
+            end
+            FRD.originalPickupContainerItem(bag, slot)
+        end
+    end
+
+    if PickupInventoryItem and not self.originalPickupInventoryItem then
+        self.originalPickupInventoryItem = PickupInventoryItem
+        PickupInventoryItem = function(slot)
+            if FRD then
+                FRD.cursorItemLink = GetInventoryItemLink("player", slot)
+                FRD.cursorItemId = FRD:GetItemIdFromLink(FRD.cursorItemLink)
+            end
+            FRD.originalPickupInventoryItem(slot)
+        end
+    end
+end
+
+function FRD:ClearCursorItemCache()
+    self.cursorItemId = nil
+    self.cursorItemLink = nil
+end
+
+-- 获取光标物品信息（兼容无 GetCursorInfo 环境）
+function FRD:GetCursorItemInfo()
+    if GetCursorInfo then
+        local cursorType, itemId, itemLink = GetCursorInfo()
+        if cursorType ~= "item" then
+            return nil
+        end
+        if not itemId and itemLink then
+            itemId = self:GetItemIdFromLink(itemLink)
+        end
+        return itemId, itemLink
+    end
+
+    if CursorHasItem and CursorHasItem() then
+        local itemId = self.cursorItemId
+        local itemLink = self.cursorItemLink
+        if not itemId and itemLink then
+            itemId = self:GetItemIdFromLink(itemLink)
+        end
+        return itemId, itemLink
+    end
+
     return nil
 end
 
@@ -1198,13 +1260,7 @@ end
 
 -- 从光标设置勤俭盾牌
 function FRD:TrySetEconomyShieldFromCursor()
-    local cursorType, itemId, itemLink = GetCursorInfo()
-    if cursorType ~= "item" then
-        return
-    end
-    if not itemId and itemLink then
-        itemId = self:GetItemIdFromLink(itemLink)
-    end
+    local itemId, itemLink = self:GetCursorItemInfo()
     if not itemId then
         return
     end
@@ -1213,6 +1269,7 @@ function FRD:TrySetEconomyShieldFromCursor()
         self:SetEconomyShieldPending(info)
     end
     ClearCursor()
+    self:ClearCursorItemCache()
 end
 
 -- 从当前副手设置勤俭盾牌
@@ -1355,8 +1412,8 @@ function FRD:CreateSettingsFrame()
             FRD:ClearEconomyShieldPending()
             return
         end
-        local cursorType = GetCursorInfo()
-        if cursorType == "item" then
+        local itemId = FRD:GetCursorItemInfo()
+        if itemId then
             FRD:TrySetEconomyShieldFromCursor()
         else
             FRD:TrySetEconomyShieldFromOffhand()
