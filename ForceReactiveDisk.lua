@@ -2,7 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
-local FRD_VERSION = 1.69
+local FRD_VERSION = 2.0
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
