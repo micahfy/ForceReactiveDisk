@@ -1361,7 +1361,7 @@ end
 function FRD:CreateSettingsFrame()
     local frame = CreateFrame("Frame", "FRDSettingsFrame", UIParent)
     frame:SetWidth(350)
-    frame:SetHeight(600)
+    frame:SetHeight(560)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -1411,6 +1411,8 @@ function FRD:CreateSettingsFrame()
     
     local autoLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     autoLabel:SetPoint("LEFT", autoCheckbox, "RIGHT", 5, 0)
+    autoLabel:SetWidth(260)
+    autoLabel:SetJustifyH("LEFT")
     autoLabel:SetText("启用主动检测模式（战斗中自动检测）")
     
     autoCheckbox:SetScript("OnClick", function()
@@ -1419,9 +1421,9 @@ function FRD:CreateSettingsFrame()
     
     -- 勤俭盾牌模块
     local economyPanel = CreateFrame("Frame", "FRDEconomyShieldPanel", frame)
-    economyPanel:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -170)
+    economyPanel:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -160)
     economyPanel:SetWidth(310)
-    economyPanel:SetHeight(170)
+    economyPanel:SetHeight(160)
     economyPanel:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -1445,15 +1447,17 @@ function FRD:CreateSettingsFrame()
 
     local economyLabel = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     economyLabel:SetPoint("LEFT", economyCheckbox, "RIGHT", 5, 0)
+    economyLabel:SetWidth(255)
+    economyLabel:SetJustifyH("LEFT")
     economyLabel:SetText("启用勤俭盾牌（低血量前使用非力反馈盾牌）")
 
     -- 勤俭盾牌血量阈值
     local economyLabel2 = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    economyLabel2:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -52)
+    economyLabel2:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -50)
     economyLabel2:SetText("勤俭盾牌血量阈值 (%):")
 
     local economySlider = CreateFrame("Slider", "FRDEconomyThresholdSlider", economyPanel, "OptionsSliderTemplate")
-    economySlider:SetPoint("TOP", economyPanel, "TOP", 0, -72)
+    economySlider:SetPoint("TOP", economyPanel, "TOP", 0, -70)
     economySlider:SetMinMaxValues(1, 100)
     economySlider:SetValueStep(1)
     economySlider:SetWidth(250)
@@ -1474,11 +1478,11 @@ function FRD:CreateSettingsFrame()
 
     -- 勤俭盾牌设置
     local economyLabel3 = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    economyLabel3:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -100)
+    economyLabel3:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -98)
     economyLabel3:SetText("勤俭盾牌设置:")
 
     local economyButton = CreateFrame("Button", "FRDEconomyShieldButton", economyPanel)
-    economyButton:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -120)
+    economyButton:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -116)
     economyButton:SetWidth(32)
     economyButton:SetHeight(32)
     economyButton:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
@@ -1523,7 +1527,7 @@ function FRD:CreateSettingsFrame()
 
     local economyName = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     economyName:SetPoint("LEFT", economyButton, "RIGHT", 8, 0)
-    economyName:SetWidth(220)
+    economyName:SetWidth(210)
     economyName:SetJustifyH("LEFT")
     economyName:SetText("未设置")
 
@@ -1532,17 +1536,19 @@ function FRD:CreateSettingsFrame()
 
     -- 检测频率标签
     local label2 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -360)
-    label2:SetText("检测频率 (秒):")
+    label2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -330)
+    label2:SetWidth(130)
+    label2:SetJustifyH("LEFT")
+    label2:SetText("检测频率(秒)")
     
     -- 检测频率滑块
     local slider2 = CreateFrame("Slider", "FRDIntervalSlider", frame, "OptionsSliderTemplate")
-    slider2:SetPoint("TOP", frame, "TOP", 0, -390)
+    slider2:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -350)
     slider2:SetMinMaxValues(0.1, 10)
     slider2:SetValueStep(0.1)
-    slider2:SetWidth(250)
-    getglobal(slider2:GetName() .. "Low"):SetText("0.1秒")
-    getglobal(slider2:GetName() .. "High"):SetText("10秒")
+    slider2:SetWidth(130)
+    getglobal(slider2:GetName() .. "Low"):SetText("0.1")
+    getglobal(slider2:GetName() .. "High"):SetText("10")
     
     -- 确保值在有效范围内
     local intervalValue = FRD_Settings.checkInterval or 2.0
@@ -1559,28 +1565,32 @@ function FRD:CreateSettingsFrame()
 
     -- 耐久监控复选框
     local monitorCheckbox = CreateFrame("CheckButton", "FRDMonitorCheckbox", frame, "UICheckButtonTemplate")
-    monitorCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -430)
+    monitorCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -390)
     monitorCheckbox:SetWidth(24)
     monitorCheckbox:SetHeight(24)
     monitorCheckbox:SetChecked(FRD_Settings.monitorEnabled)
 
     local monitorLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     monitorLabel:SetPoint("LEFT", monitorCheckbox, "RIGHT", 5, 0)
+    monitorLabel:SetWidth(260)
+    monitorLabel:SetJustifyH("LEFT")
     monitorLabel:SetText("启用战斗耐久监控（显示小窗）")
 
     -- 监控刷新频率标签
     local label3 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label3:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -465)
-    label3:SetText("监控刷新频率 (秒):")
+    label3:SetPoint("TOPLEFT", frame, "TOPLEFT", 190, -330)
+    label3:SetWidth(130)
+    label3:SetJustifyH("LEFT")
+    label3:SetText("监控刷新(秒)")
 
     -- 监控刷新频率滑块
     local slider3 = CreateFrame("Slider", "FRDMonitorIntervalSlider", frame, "OptionsSliderTemplate")
-    slider3:SetPoint("TOP", frame, "TOP", 0, -495)
+    slider3:SetPoint("TOPLEFT", frame, "TOPLEFT", 180, -350)
     slider3:SetMinMaxValues(0.1, 2.0)
     slider3:SetValueStep(0.1)
-    slider3:SetWidth(250)
-    getglobal(slider3:GetName() .. "Low"):SetText("0.1秒")
-    getglobal(slider3:GetName() .. "High"):SetText("2.0秒")
+    slider3:SetWidth(130)
+    getglobal(slider3:GetName() .. "Low"):SetText("0.1")
+    getglobal(slider3:GetName() .. "High"):SetText("2.0")
 
     local monitorIntervalValue = FRD_Settings.monitorInterval or 0.5
     if monitorIntervalValue < 0.1 then monitorIntervalValue = 0.1 end
@@ -1609,24 +1619,28 @@ function FRD:CreateSettingsFrame()
 
     -- 脱战也显示监控复选框
     local monitorOOCCheckbox = CreateFrame("CheckButton", "FRDMonitorOOCCheckbox", frame, "UICheckButtonTemplate")
-    monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -530)
+    monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -420)
     monitorOOCCheckbox:SetWidth(24)
     monitorOOCCheckbox:SetHeight(24)
     monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
 
     local monitorOOCLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     monitorOOCLabel:SetPoint("LEFT", monitorOOCCheckbox, "RIGHT", 5, 0)
+    monitorOOCLabel:SetWidth(260)
+    monitorOOCLabel:SetJustifyH("LEFT")
     monitorOOCLabel:SetText("脱战也显示盾牌耐久监控")
 
     -- 脱战低耐久修理提醒复选框
     local repairCheckbox = CreateFrame("CheckButton", "FRDRepairCheckbox", frame, "UICheckButtonTemplate")
-    repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -560)
+    repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -450)
     repairCheckbox:SetWidth(24)
     repairCheckbox:SetHeight(24)
     repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
 
     local repairLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     repairLabel:SetPoint("LEFT", repairCheckbox, "RIGHT", 5, 0)
+    repairLabel:SetWidth(260)
+    repairLabel:SetJustifyH("LEFT")
     repairLabel:SetText("脱战后若盾牌低于90%提醒修理")
     
     -- 确认按钮
