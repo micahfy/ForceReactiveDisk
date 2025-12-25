@@ -1346,24 +1346,43 @@ function FRD:CreateSettingsFrame()
         -- 复选框点击时不立即保存，等待确认按钮
     end)
     
+    -- 勤俭盾牌模块
+    local economyPanel = CreateFrame("Frame", "FRDEconomyShieldPanel", frame)
+    economyPanel:SetPoint("TOPLEFT", frame, "TOPLEFT", 20, -170)
+    economyPanel:SetWidth(310)
+    economyPanel:SetHeight(170)
+    economyPanel:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    economyPanel:SetBackdropColor(0, 0, 0, 0.35)
+
+    local economyTitle = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    economyTitle:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -8)
+    economyTitle:SetText("勤俭盾牌模块")
+
     -- 勤俭盾牌开关
-    local economyCheckbox = CreateFrame("CheckButton", "FRDEconomyShieldCheckbox", frame, "UICheckButtonTemplate")
-    economyCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -170)
+    local economyCheckbox = CreateFrame("CheckButton", "FRDEconomyShieldCheckbox", economyPanel, "UICheckButtonTemplate")
+    economyCheckbox:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -26)
     economyCheckbox:SetWidth(24)
     economyCheckbox:SetHeight(24)
     economyCheckbox:SetChecked(FRD_Settings.economyShieldEnabled)
 
-    local economyLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local economyLabel = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     economyLabel:SetPoint("LEFT", economyCheckbox, "RIGHT", 5, 0)
     economyLabel:SetText("启用勤俭盾牌（低血量前使用非力反馈盾牌）")
 
     -- 勤俭盾牌血量阈值
-    local economyLabel2 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    economyLabel2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -200)
+    local economyLabel2 = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    economyLabel2:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -52)
     economyLabel2:SetText("勤俭盾牌血量阈值 (%):")
 
-    local economySlider = CreateFrame("Slider", "FRDEconomyThresholdSlider", frame, "OptionsSliderTemplate")
-    economySlider:SetPoint("TOP", frame, "TOP", 0, -230)
+    local economySlider = CreateFrame("Slider", "FRDEconomyThresholdSlider", economyPanel, "OptionsSliderTemplate")
+    economySlider:SetPoint("TOP", economyPanel, "TOP", 0, -72)
     economySlider:SetMinMaxValues(1, 100)
     economySlider:SetValueStep(1)
     economySlider:SetWidth(250)
@@ -1383,12 +1402,12 @@ function FRD:CreateSettingsFrame()
     end)
 
     -- 勤俭盾牌设置
-    local economyLabel3 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    economyLabel3:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -265)
+    local economyLabel3 = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    economyLabel3:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -100)
     economyLabel3:SetText("勤俭盾牌设置:")
 
-    local economyButton = CreateFrame("Button", "FRDEconomyShieldButton", frame)
-    economyButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -290)
+    local economyButton = CreateFrame("Button", "FRDEconomyShieldButton", economyPanel)
+    economyButton:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -120)
     economyButton:SetWidth(32)
     economyButton:SetHeight(32)
     economyButton:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
@@ -1431,7 +1450,7 @@ function FRD:CreateSettingsFrame()
         GameTooltip:Hide()
     end)
 
-    local economyName = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local economyName = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     economyName:SetPoint("LEFT", economyButton, "RIGHT", 8, 0)
     economyName:SetWidth(220)
     economyName:SetJustifyH("LEFT")
@@ -1442,12 +1461,12 @@ function FRD:CreateSettingsFrame()
 
     -- 检测频率标签
     local label2 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -330)
+    label2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -360)
     label2:SetText("检测频率 (秒):")
     
     -- 检测频率滑块
     local slider2 = CreateFrame("Slider", "FRDIntervalSlider", frame, "OptionsSliderTemplate")
-    slider2:SetPoint("TOP", frame, "TOP", 0, -360)
+    slider2:SetPoint("TOP", frame, "TOP", 0, -390)
     slider2:SetMinMaxValues(0.1, 10)
     slider2:SetValueStep(0.1)
     slider2:SetWidth(250)
@@ -1469,7 +1488,7 @@ function FRD:CreateSettingsFrame()
 
     -- 耐久监控复选框
     local monitorCheckbox = CreateFrame("CheckButton", "FRDMonitorCheckbox", frame, "UICheckButtonTemplate")
-    monitorCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -400)
+    monitorCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -430)
     monitorCheckbox:SetWidth(24)
     monitorCheckbox:SetHeight(24)
     monitorCheckbox:SetChecked(FRD_Settings.monitorEnabled)
@@ -1480,12 +1499,12 @@ function FRD:CreateSettingsFrame()
 
     -- 监控刷新频率标签
     local label3 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label3:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -435)
+    label3:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -465)
     label3:SetText("监控刷新频率 (秒):")
 
     -- 监控刷新频率滑块
     local slider3 = CreateFrame("Slider", "FRDMonitorIntervalSlider", frame, "OptionsSliderTemplate")
-    slider3:SetPoint("TOP", frame, "TOP", 0, -465)
+    slider3:SetPoint("TOP", frame, "TOP", 0, -495)
     slider3:SetMinMaxValues(0.1, 2.0)
     slider3:SetValueStep(0.1)
     slider3:SetWidth(250)
@@ -1519,7 +1538,7 @@ function FRD:CreateSettingsFrame()
 
     -- 脱战也显示监控复选框
     local monitorOOCCheckbox = CreateFrame("CheckButton", "FRDMonitorOOCCheckbox", frame, "UICheckButtonTemplate")
-    monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -500)
+    monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -530)
     monitorOOCCheckbox:SetWidth(24)
     monitorOOCCheckbox:SetHeight(24)
     monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
@@ -1530,7 +1549,7 @@ function FRD:CreateSettingsFrame()
 
     -- 脱战低耐久修理提醒复选框
     local repairCheckbox = CreateFrame("CheckButton", "FRDRepairCheckbox", frame, "UICheckButtonTemplate")
-    repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -530)
+    repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -560)
     repairCheckbox:SetWidth(24)
     repairCheckbox:SetHeight(24)
     repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
