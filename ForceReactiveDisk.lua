@@ -718,15 +718,19 @@ function FRD:CreateMinimapButton()
     button:SetWidth(32)
     button:SetHeight(32)
     button:SetFrameStrata("MEDIUM")
+    button:SetFrameLevel(8) -- 确保位于更高层级
     button:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 52, -52)
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-    button:RegisterForClicks("AnyUp")
+
+    -- 先注册点击，再注册拖拽
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    button:RegisterForDrag("LeftButton")
     
     local icon = button:CreateTexture("FRDMinimapIcon", "BACKGROUND")
     icon:SetWidth(26)
     icon:SetHeight(26)
     icon:SetPoint("CENTER", 0, 1)
-    icon:SetTexture("Interface\\Icons\\Spell_Arcane_PortalDarnassus")        -- 使用力反馈盾牌对应的法术图标
+    icon:SetTexture("Interface\\Icons\\Spell_Arcane_PortalDarnassus")
     button.icon = icon
 
     local disabledOverlay = button:CreateTexture("FRDMinimapDisabledOverlay", "ARTWORK")
@@ -738,30 +742,27 @@ function FRD:CreateMinimapButton()
     disabledOverlay:Hide()
     button.disabledOverlay = disabledOverlay
     
-    button:SetScript("OnClick", function(self, mouseButton)
-        local btn = mouseButton or arg1 -- 兼容旧环境
-        if btn == "LeftButton" then
+    button:SetScript("OnClick", function()
+        local mouseBtn = arg1 -- 1.12 环境使用全局 arg1
+        if mouseBtn == "LeftButton" then
             FRDSettingsFrame:Show()
-            return
-        end
-        if btn ~= "RightButton" then
-            return
-        end
-        FRD_Settings.enabled = not FRD_Settings.enabled
-        if FRD_Settings.enabled then
-            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
-            FRD:UpdateMonitorVisibility(true)
-            if FRD_Settings.autoMode and FRD.inCombat then
-                FRD:StartAutoCheck()
+        elseif mouseBtn == "RightButton" then
+            FRD_Settings.enabled = not FRD_Settings.enabled
+            if FRD_Settings.enabled then
+                DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 插件已启用")
+                FRD:UpdateMonitorVisibility(true)
+                if FRD_Settings.autoMode and FRD.inCombat then
+                    FRD:StartAutoCheck()
+                end
+                FRD:CheckRepairReminder()
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
+                FRD:StopAutoCheck()
+                FRD:UpdateMonitorVisibility(true)
+                FRD:HideRepairReminder()
             end
-            FRD:CheckRepairReminder()
-        else
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用")
-            FRD:StopAutoCheck()
-            FRD:UpdateMonitorVisibility(true)
-            FRD:HideRepairReminder()
+            FRD:UpdateMinimapIconState()
         end
-        FRD:UpdateMinimapIconState()
     end)
     
     button:SetScript("OnEnter", function()
@@ -786,8 +787,7 @@ function FRD:CreateMinimapButton()
         GameTooltip:Hide()
     end)
     
-    -- 支持拖拽
-    button:RegisterForDrag("LeftButton")
+    -- 拖拽脚本
     button:SetScript("OnDragStart", function()
         this:SetScript("OnUpdate", FRD.MinimapButton_OnUpdate)
     end)
@@ -796,7 +796,25 @@ function FRD:CreateMinimapButton()
     end)
 
     self.minimapButton = button
-    self:UpdateMinimapIconState()
+    
+    -- 延迟更新位置和状态，确保界面加载完毕
+    self:ScheduleTimer(function()
+        FRD:UpdateMinimapButtonPosition()
+        FRD:UpdateMinimapIconState()
+    end, 0.5)
+end
+
+-- 简单的延迟执行函数
+function FRD:ScheduleTimer(func, delay)
+    local frame = CreateFrame("Frame")
+    local elapsed = 0
+    frame:SetScript("OnUpdate", function()
+        elapsed = elapsed + arg1
+        if elapsed >= delay then
+            func()
+            frame:SetScript("OnUpdate", nil)
+        end
+    end)
 end
 
 -- 小地图按钮拖拽更新
