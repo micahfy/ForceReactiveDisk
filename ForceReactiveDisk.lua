@@ -2,7 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
-local FRD_VERSION = 1.68
+local FRD_VERSION = 1.69
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -11,6 +11,8 @@ FRD_Settings = {
     autoMode = false, -- 主动检测模式
     checkInterval = 2.0, -- 检测频率（秒）
     enabled = true, -- 插件开关
+    economyShieldEnabled = false, -- 启用勤俭盾牌
+    economyShieldThreshold = 50, -- 勤俭盾牌血量阈值(%)
     monitorEnabled = false, -- 战斗中显示耐久监控
     monitorInterval = 0.5, -- 监控刷新频率（秒）
     monitorShowOOC = false, -- 脱战后也显示监控
@@ -33,6 +35,7 @@ FRD:RegisterEvent("UPDATE_INVENTORY_ALERTS")
 FRD.timeSinceLastCheck = 0
 FRD.inCombat = false
 FRD.warnedAllBelowTwo = false
+FRD.warnedEconomyShieldMissing = false
 
 FRD:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
@@ -52,6 +55,15 @@ FRD:SetScript("OnEvent", function()
         end
         if FRD_Settings.enabled == nil then
             FRD_Settings.enabled = true
+        end
+        if FRD_Settings.economyShieldEnabled == nil then
+            FRD_Settings.economyShieldEnabled = false
+        end
+        if not FRD_Settings.economyShieldThreshold then
+            FRD_Settings.economyShieldThreshold = 50
+        end
+        if FRD_Settings.economyShieldItemId == nil and FRD_Settings.economyShieldItemLink then
+            FRD_Settings.economyShieldItemId = FRD:GetItemIdFromLink(FRD_Settings.economyShieldItemLink)
         end
         if FRD_Settings.monitorEnabled == nil then
             FRD_Settings.monitorEnabled = false
@@ -85,12 +97,18 @@ FRD:SetScript("OnEvent", function()
         FRD:HideRepairReminder()
         if FRD_Settings.autoMode and FRD_Settings.enabled then
             FRD:StartAutoCheck()
+            if FRD_Settings.economyShieldEnabled then
+                FRD:CheckAndSwapDisk(true)
+            end
         end
         FRD:UpdateMonitorVisibility(true)
         FRD:UpdateMinimapIconState()
     elseif event == "PLAYER_REGEN_ENABLED" then
         FRD.inCombat = false
         FRD:StopAutoCheck()
+        if FRD_Settings.autoMode and FRD_Settings.enabled and FRD_Settings.economyShieldEnabled then
+            FRD:CheckAndSwapDisk(true)
+        end
         FRD:UpdateMonitorVisibility(true)
         FRD:CheckRepairReminder()
     elseif event == "BAG_UPDATE" or event == "UPDATE_INVENTORY_ALERTS" then
@@ -111,6 +129,14 @@ function FRD:MigrateSettings(oldVersion)
         -- 确保修理提醒位置存在
         if not FRD_Settings.repairReminderPosition then
             FRD_Settings.repairReminderPosition = { point = "TOP", relativePoint = "TOP", x = 0, y = -120 }
+        end
+    end
+    if oldVersion < 1.69 then
+        if FRD_Settings.economyShieldEnabled == nil then
+            FRD_Settings.economyShieldEnabled = false
+        end
+        if not FRD_Settings.economyShieldThreshold then
+            FRD_Settings.economyShieldThreshold = 50
         end
     end
 end
@@ -257,6 +283,8 @@ function FRD:UpdateMonitorText(force)
     end
 
     local entries = {}
+    local frdTotalDur = 0
+    local frdCount = 0
 
     if offhandIsDisk then
         table.insert(entries, {
@@ -265,6 +293,8 @@ function FRD:UpdateMonitorText(force)
             texture = offhandTexture or "Interface\\Icons\\INV_Shield_21",
             equipped = true
         })
+        frdTotalDur = frdTotalDur + (offhandDurability or 0)
+        frdCount = frdCount + 1
     end
 
     if bagCount > 0 then
@@ -289,24 +319,27 @@ function FRD:UpdateMonitorText(force)
                 bag = d.bag,
                 slot = d.slot
             })
+            frdTotalDur = frdTotalDur + d.durability
+            frdCount = frdCount + 1
         end
     end
 
-    local totalDur = 0
-    local totalCount = table.getn(entries)
-    for i = 1, totalCount do
-        totalDur = totalDur + entries[i].durability
-    end
-
     local totalInfo
-    if totalCount > 0 then
-        local totalPool = totalCount * 100
-        totalInfo = string.format("总耐久: %.1f%% / %d%%", totalDur, totalPool)
+    if frdCount > 0 then
+        local totalPool = frdCount * 100
+        totalInfo = string.format("总耐久: %.1f%% / %d%%", frdTotalDur, totalPool)
     else
         totalInfo = "总耐久: 无力反馈盾牌"
     end
 
     self.monitorFrame.header:SetText(totalInfo)
+
+    local economyEntry = self:GetEconomyShieldMonitorEntry()
+    if economyEntry then
+        table.insert(entries, economyEntry)
+    end
+
+    local totalCount = table.getn(entries)
 
     local columns = 6
     local iconSize = 36
@@ -348,7 +381,9 @@ function FRD:UpdateMonitorText(force)
             iconFrame.text:SetText("")
 
             iconFrame:SetScript("OnClick", function()
-                if this.bag and this.slot then
+                if this.isEconomy then
+                    FRD:EquipEconomyShield(false)
+                elseif this.bag and this.slot then
                     FRD:EquipDisk(this.bag, this.slot)
                 end
             end)
@@ -361,10 +396,16 @@ function FRD:UpdateMonitorText(force)
         iconFrame:SetPoint("TOPLEFT", self.monitorFrame.iconContainer, "TOPLEFT", col * (iconSize + padding), -row * (iconSize + 18))
 
         iconFrame.icon:SetTexture(entry.texture)
-        local colorCode = self:FormatDurabilityColor(entry.durability)
-        iconFrame.text:SetText(colorCode .. string.format("%.0f", entry.durability) .. "%|r")
+        if entry.isEconomy then
+            local labelColor = entry.found and "|cff00ff00" or "|cff888888"
+            iconFrame.text:SetText(labelColor .. "勤俭盾牌|r")
+        else
+            local colorCode = self:FormatDurabilityColor(entry.durability)
+            iconFrame.text:SetText(colorCode .. string.format("%.0f", entry.durability) .. "%|r")
+        end
         iconFrame.bag = entry.bag
         iconFrame.slot = entry.slot
+        iconFrame.isEconomy = entry.isEconomy
 
         if entry.equipped then
             iconFrame.bg:SetTexture(0, 0.5, 0, 0.5)
@@ -593,6 +634,184 @@ function FRD:GetOffhandDurability()
     return 100
 end
 
+-- 从物品链接获取物品ID
+function FRD:GetItemIdFromLink(itemLink)
+    if not itemLink then
+        return nil
+    end
+    local _, _, itemId = string.find(itemLink, "item:(%d+)")
+    return tonumber(itemId)
+end
+
+-- 从物品链接获取物品名称
+function FRD:GetItemNameFromLink(itemLink)
+    if not itemLink then
+        return nil
+    end
+    return string.match(itemLink, "%[(.+)%]")
+end
+
+-- 获取勤俭盾牌物品ID
+function FRD:GetEconomyShieldItemId()
+    if FRD_Settings.economyShieldItemId then
+        return FRD_Settings.economyShieldItemId
+    end
+    if FRD_Settings.economyShieldItemLink then
+        local itemId = self:GetItemIdFromLink(FRD_Settings.economyShieldItemLink)
+        FRD_Settings.economyShieldItemId = itemId
+        return itemId
+    end
+    return nil
+end
+
+-- 获取玩家当前血量百分比
+function FRD:GetPlayerHealthPercent()
+    local maxHealth = UnitHealthMax("player")
+    if not maxHealth or maxHealth <= 0 then
+        return 0
+    end
+    return (UnitHealth("player") / maxHealth) * 100
+end
+
+-- 查找勤俭盾牌（副手优先，其次背包）
+function FRD:FindEconomyShield()
+    local itemId = self:GetEconomyShieldItemId()
+    if not itemId then
+        return nil
+    end
+
+    local offhandLink = GetInventoryItemLink("player", 17)
+    if offhandLink then
+        local offhandId = self:GetItemIdFromLink(offhandLink)
+        if offhandId and offhandId == itemId and offhandId ~= FORCE_REACTIVE_DISK_ID then
+            self.warnedEconomyShieldMissing = false
+            return {
+                equipped = true,
+                durability = self:GetOffhandDurability(),
+                texture = GetInventoryItemTexture("player", 17)
+            }
+        end
+    end
+
+    for bag = 0, 4 do
+        for slot = 1, GetContainerNumSlots(bag) do
+            local link = GetContainerItemLink(bag, slot)
+            if link then
+                local id = self:GetItemIdFromLink(link)
+                if id and id == itemId and id ~= FORCE_REACTIVE_DISK_ID then
+                    local texture
+                    if GetContainerItemInfo then
+                        local tex = GetContainerItemInfo(bag, slot)
+                        if type(tex) == "table" then
+                            texture = tex.icon
+                        else
+                            texture = tex
+                        end
+                    end
+                    self.warnedEconomyShieldMissing = false
+                    return {
+                        bag = bag,
+                        slot = slot,
+                        durability = self:GetItemDurability(bag, slot),
+                        texture = texture or "Interface\\Icons\\INV_Shield_05",
+                        equipped = false
+                    }
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+-- 装备勤俭盾牌
+function FRD:EquipEconomyShield(silent)
+    local economy = self:FindEconomyShield()
+    if not economy then
+        return false
+    end
+    if economy.equipped then
+        return true
+    end
+    if economy.bag and economy.slot then
+        self:EquipDisk(economy.bag, economy.slot)
+        if not silent then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[FRD]|r 已装备勤俭盾牌")
+        end
+        return true
+    end
+    return false
+end
+
+-- 勤俭盾牌丢失提示
+function FRD:WarnEconomyShieldMissing()
+    if self.warnedEconomyShieldMissing then
+        return
+    end
+    self.warnedEconomyShieldMissing = true
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 未找到勤俭盾牌，已回退到力反馈盾牌逻辑")
+end
+
+-- 勤俭盾牌逻辑处理，返回是否已处理
+function FRD:HandleEconomyShieldSwap(silent)
+    if not FRD_Settings.economyShieldEnabled then
+        return false
+    end
+    if not self:GetEconomyShieldItemId() then
+        return false
+    end
+
+    if self.inCombat then
+        local threshold = FRD_Settings.economyShieldThreshold or 50
+        if threshold < 1 then threshold = 1 end
+        if threshold > 100 then threshold = 100 end
+        local healthPercent = self:GetPlayerHealthPercent()
+        if healthPercent > threshold then
+            if self:EquipEconomyShield(silent) then
+                return true
+            end
+            self:WarnEconomyShieldMissing()
+        end
+        return false
+    end
+
+    if self:EquipEconomyShield(silent) then
+        return true
+    end
+    self:WarnEconomyShieldMissing()
+    return false
+end
+
+-- 勤俭盾牌监控条目
+function FRD:GetEconomyShieldMonitorEntry()
+    if not FRD_Settings.economyShieldEnabled then
+        return nil
+    end
+    if not self:GetEconomyShieldItemId() then
+        return nil
+    end
+
+    local info = self:FindEconomyShield()
+    local texture = FRD_Settings.economyShieldTexture or "Interface\\Icons\\INV_Shield_05"
+    local entry = {
+        label = "勤俭盾牌",
+        texture = texture,
+        durability = nil,
+        equipped = false,
+        isEconomy = true,
+        found = false
+    }
+    if info then
+        entry.texture = info.texture or texture
+        entry.durability = info.durability
+        entry.equipped = info.equipped
+        entry.bag = info.bag
+        entry.slot = info.slot
+        entry.found = true
+    end
+    return entry
+end
+
 -- 装备盾牌
 function FRD:EquipDisk(bag, slot)
     PickupContainerItem(bag, slot)
@@ -622,6 +841,10 @@ function FRD:CheckAndSwapDisk(silent)
         if not silent then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 插件已停用，右键小地图图标可重新启用")
         end
+        return
+    end
+
+    if self:HandleEconomyShieldSwap(silent) then
         return
     end
 
@@ -858,11 +1081,159 @@ function FRD:UpdateMinimapIconState()
     end
 end
 
+-- 构建勤俭盾牌信息
+function FRD:BuildEconomyShieldInfo(itemId, itemLink)
+    if not itemId then
+        return nil
+    end
+    if itemId == FORCE_REACTIVE_DISK_ID then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 力反馈盾牌不能设置为勤俭盾牌")
+        return nil
+    end
+
+    local name = self:GetItemNameFromLink(itemLink)
+    local texture = nil
+    if GetItemInfo then
+        local itemName, _, _, _, _, _, _, _, _, itemTexture = GetItemInfo(itemId)
+        if not name then
+            name = itemName
+        end
+        texture = itemTexture
+    end
+    if not texture then
+        texture = "Interface\\Icons\\INV_Shield_05"
+    end
+    if not name then
+        name = "未知盾牌"
+    end
+
+    return {
+        itemId = itemId,
+        itemLink = itemLink,
+        name = name,
+        texture = texture
+    }
+end
+
+-- 更新勤俭盾牌选择显示
+function FRD:UpdateEconomyShieldSelectionDisplay()
+    if not self.settingsFrame or not self.settingsFrame.economyShieldButton then
+        return
+    end
+    local pending = self.settingsFrame.economyShieldPending
+    local texture = (pending and pending.texture) or "Interface\\Icons\\INV_Shield_05"
+    local name = (pending and pending.name) or "未设置"
+    self.settingsFrame.economyShieldButton.icon:SetTexture(texture)
+    self.settingsFrame.economyShieldName:SetText(name)
+end
+
+-- 设置勤俭盾牌临时选择
+function FRD:SetEconomyShieldPending(info)
+    if not self.settingsFrame then
+        return
+    end
+    self.settingsFrame.economyShieldPending = info
+    self:UpdateEconomyShieldSelectionDisplay()
+end
+
+-- 清空勤俭盾牌临时选择
+function FRD:ClearEconomyShieldPending()
+    if not self.settingsFrame then
+        return
+    end
+    self.settingsFrame.economyShieldPending = nil
+    self:UpdateEconomyShieldSelectionDisplay()
+end
+
+-- 重置勤俭盾牌临时选择
+function FRD:ResetEconomyShieldPendingFromSettings()
+    if not self.settingsFrame then
+        return
+    end
+    if FRD_Settings.economyShieldItemId then
+        local info = {
+            itemId = FRD_Settings.economyShieldItemId,
+            itemLink = FRD_Settings.economyShieldItemLink,
+            name = FRD_Settings.economyShieldName,
+            texture = FRD_Settings.economyShieldTexture
+        }
+        if GetItemInfo and info.itemId and (not info.name or not info.texture) then
+            local itemName, _, _, _, _, _, _, _, _, itemTexture = GetItemInfo(info.itemId)
+            if not info.name then
+                info.name = itemName
+            end
+            if not info.texture then
+                info.texture = itemTexture
+            end
+        end
+        if not info.texture then
+            info.texture = "Interface\\Icons\\INV_Shield_05"
+        end
+        if not info.name then
+            info.name = "未知盾牌"
+        end
+        self.settingsFrame.economyShieldPending = info
+    else
+        self.settingsFrame.economyShieldPending = nil
+    end
+    self:UpdateEconomyShieldSelectionDisplay()
+end
+
+-- 应用勤俭盾牌设置
+function FRD:ApplyEconomyShieldPendingToSettings()
+    local pending = self.settingsFrame and self.settingsFrame.economyShieldPending
+    if pending then
+        FRD_Settings.economyShieldItemId = pending.itemId
+        FRD_Settings.economyShieldItemLink = pending.itemLink
+        FRD_Settings.economyShieldName = pending.name
+        FRD_Settings.economyShieldTexture = pending.texture
+    else
+        FRD_Settings.economyShieldItemId = nil
+        FRD_Settings.economyShieldItemLink = nil
+        FRD_Settings.economyShieldName = nil
+        FRD_Settings.economyShieldTexture = nil
+    end
+    self.warnedEconomyShieldMissing = false
+end
+
+-- 从光标设置勤俭盾牌
+function FRD:TrySetEconomyShieldFromCursor()
+    local cursorType, itemId, itemLink = GetCursorInfo()
+    if cursorType ~= "item" then
+        return
+    end
+    if not itemId and itemLink then
+        itemId = self:GetItemIdFromLink(itemLink)
+    end
+    if not itemId then
+        return
+    end
+    local info = self:BuildEconomyShieldInfo(itemId, itemLink)
+    if info then
+        self:SetEconomyShieldPending(info)
+    end
+    ClearCursor()
+end
+
+-- 从当前副手设置勤俭盾牌
+function FRD:TrySetEconomyShieldFromOffhand()
+    local offhandLink = GetInventoryItemLink("player", 17)
+    if not offhandLink then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 当前副手为空")
+        return
+    end
+    local itemId = self:GetItemIdFromLink(offhandLink)
+    local info = self:BuildEconomyShieldInfo(itemId, offhandLink)
+    if info then
+        self:SetEconomyShieldPending(info)
+    end
+end
+
 -- 创建设置界面
 function FRD:CreateSettingsFrame()
     local frame = CreateFrame("Frame", "FRDSettingsFrame", UIParent)
     frame:SetWidth(350)
-    frame:SetHeight(480)
+    frame:SetHeight(600)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -918,14 +1289,108 @@ function FRD:CreateSettingsFrame()
         -- 复选框点击时不立即保存，等待确认按钮
     end)
     
+    -- 勤俭盾牌开关
+    local economyCheckbox = CreateFrame("CheckButton", "FRDEconomyShieldCheckbox", frame, "UICheckButtonTemplate")
+    economyCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -170)
+    economyCheckbox:SetWidth(24)
+    economyCheckbox:SetHeight(24)
+    economyCheckbox:SetChecked(FRD_Settings.economyShieldEnabled)
+
+    local economyLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    economyLabel:SetPoint("LEFT", economyCheckbox, "RIGHT", 5, 0)
+    economyLabel:SetText("启用勤俭盾牌（低血量前使用非力反馈盾牌）")
+
+    -- 勤俭盾牌血量阈值
+    local economyLabel2 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    economyLabel2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -200)
+    economyLabel2:SetText("勤俭盾牌血量阈值 (%):")
+
+    local economySlider = CreateFrame("Slider", "FRDEconomyThresholdSlider", frame, "OptionsSliderTemplate")
+    economySlider:SetPoint("TOP", frame, "TOP", 0, -230)
+    economySlider:SetMinMaxValues(1, 100)
+    economySlider:SetValueStep(1)
+    economySlider:SetWidth(250)
+    getglobal(economySlider:GetName() .. "Low"):SetText("1%")
+    getglobal(economySlider:GetName() .. "High"):SetText("100%")
+
+    local economyThresholdValue = FRD_Settings.economyShieldThreshold or 50
+    if economyThresholdValue < 1 then economyThresholdValue = 1 end
+    if economyThresholdValue > 100 then economyThresholdValue = 100 end
+
+    economySlider:SetValue(economyThresholdValue)
+    getglobal(economySlider:GetName() .. "Text"):SetText(economyThresholdValue .. "%")
+
+    economySlider:SetScript("OnValueChanged", function()
+        local newValue = this:GetValue()
+        getglobal(this:GetName() .. "Text"):SetText(newValue .. "%")
+    end)
+
+    -- 勤俭盾牌设置
+    local economyLabel3 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    economyLabel3:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -265)
+    economyLabel3:SetText("勤俭盾牌设置:")
+
+    local economyButton = CreateFrame("Button", "FRDEconomyShieldButton", frame)
+    economyButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -290)
+    economyButton:SetWidth(32)
+    economyButton:SetHeight(32)
+    economyButton:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
+    economyButton:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
+    economyButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+    economyButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    economyButton:RegisterForDrag("LeftButton")
+
+    local economyIcon = economyButton:CreateTexture(nil, "ARTWORK")
+    economyIcon:SetWidth(26)
+    economyIcon:SetHeight(26)
+    economyIcon:SetPoint("CENTER", economyButton, "CENTER", 0, 0)
+    economyButton.icon = economyIcon
+
+    economyButton:SetScript("OnReceiveDrag", function()
+        FRD:TrySetEconomyShieldFromCursor()
+    end)
+    economyButton:SetScript("OnClick", function()
+        local mouseBtn = arg1
+        if mouseBtn == "RightButton" then
+            FRD:ClearEconomyShieldPending()
+            return
+        end
+        local cursorType = GetCursorInfo()
+        if cursorType == "item" then
+            FRD:TrySetEconomyShieldFromCursor()
+        else
+            FRD:TrySetEconomyShieldFromOffhand()
+        end
+    end)
+    economyButton:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("勤俭盾牌设置", 1, 1, 1)
+        GameTooltip:AddLine("左键: 使用当前副手", 0.9, 0.9, 0.9)
+        GameTooltip:AddLine("拖拽: 从背包选择盾牌", 0.9, 0.9, 0.9)
+        GameTooltip:AddLine("右键: 清除设置", 0.9, 0.9, 0.9)
+        GameTooltip:Show()
+    end)
+    economyButton:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    local economyName = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    economyName:SetPoint("LEFT", economyButton, "RIGHT", 8, 0)
+    economyName:SetWidth(220)
+    economyName:SetJustifyH("LEFT")
+    economyName:SetText("未设置")
+
+    frame.economyShieldButton = economyButton
+    frame.economyShieldName = economyName
+
     -- 检测频率标签
     local label2 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -180)
+    label2:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -330)
     label2:SetText("检测频率 (秒):")
     
     -- 检测频率滑块
     local slider2 = CreateFrame("Slider", "FRDIntervalSlider", frame, "OptionsSliderTemplate")
-    slider2:SetPoint("TOP", frame, "TOP", 0, -210)
+    slider2:SetPoint("TOP", frame, "TOP", 0, -360)
     slider2:SetMinMaxValues(0.1, 10)
     slider2:SetValueStep(0.1)
     slider2:SetWidth(250)
@@ -947,7 +1412,7 @@ function FRD:CreateSettingsFrame()
 
     -- 耐久监控复选框
     local monitorCheckbox = CreateFrame("CheckButton", "FRDMonitorCheckbox", frame, "UICheckButtonTemplate")
-    monitorCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -250)
+    monitorCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -400)
     monitorCheckbox:SetWidth(24)
     monitorCheckbox:SetHeight(24)
     monitorCheckbox:SetChecked(FRD_Settings.monitorEnabled)
@@ -958,12 +1423,12 @@ function FRD:CreateSettingsFrame()
 
     -- 监控刷新频率标签
     local label3 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label3:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -285)
+    label3:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -435)
     label3:SetText("监控刷新频率 (秒):")
 
     -- 监控刷新频率滑块
     local slider3 = CreateFrame("Slider", "FRDMonitorIntervalSlider", frame, "OptionsSliderTemplate")
-    slider3:SetPoint("TOP", frame, "TOP", 0, -315)
+    slider3:SetPoint("TOP", frame, "TOP", 0, -465)
     slider3:SetMinMaxValues(0.1, 2.0)
     slider3:SetValueStep(0.1)
     slider3:SetWidth(250)
@@ -986,6 +1451,8 @@ function FRD:CreateSettingsFrame()
     frame.tempSettings = {
         durabilityThreshold = FRD_Settings.durabilityThreshold,
         autoMode = FRD_Settings.autoMode,
+        economyShieldEnabled = FRD_Settings.economyShieldEnabled,
+        economyShieldThreshold = economyThresholdValue,
         checkInterval = intervalValue,
         monitorEnabled = FRD_Settings.monitorEnabled,
         monitorInterval = monitorIntervalValue,
@@ -995,7 +1462,7 @@ function FRD:CreateSettingsFrame()
 
     -- 脱战也显示监控复选框
     local monitorOOCCheckbox = CreateFrame("CheckButton", "FRDMonitorOOCCheckbox", frame, "UICheckButtonTemplate")
-    monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -330)
+    monitorOOCCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -500)
     monitorOOCCheckbox:SetWidth(24)
     monitorOOCCheckbox:SetHeight(24)
     monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
@@ -1006,7 +1473,7 @@ function FRD:CreateSettingsFrame()
 
     -- 脱战低耐久修理提醒复选框
     local repairCheckbox = CreateFrame("CheckButton", "FRDRepairCheckbox", frame, "UICheckButtonTemplate")
-    repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -360)
+    repairCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -530)
     repairCheckbox:SetWidth(24)
     repairCheckbox:SetHeight(24)
     repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
@@ -1025,11 +1492,14 @@ function FRD:CreateSettingsFrame()
         -- 保存设置
         FRD_Settings.durabilityThreshold = slider1:GetValue()
         FRD_Settings.autoMode = autoCheckbox:GetChecked() == 1
+        FRD_Settings.economyShieldEnabled = economyCheckbox:GetChecked() == 1
+        FRD_Settings.economyShieldThreshold = economySlider:GetValue()
         FRD_Settings.checkInterval = slider2:GetValue()
         FRD_Settings.monitorEnabled = monitorCheckbox:GetChecked() == 1
         FRD_Settings.monitorInterval = slider3:GetValue()
         FRD_Settings.monitorShowOOC = monitorOOCCheckbox:GetChecked() == 1
         FRD_Settings.repairReminderEnabled = repairCheckbox:GetChecked() == 1
+        FRD:ApplyEconomyShieldPendingToSettings()
         
         -- 如果主动模式状态改变，更新检测状态
         if FRD_Settings.autoMode and FRD.inCombat then
@@ -1054,11 +1524,17 @@ function FRD:CreateSettingsFrame()
         -- 恢复原始设置
         slider1:SetValue(FRD_Settings.durabilityThreshold)
         autoCheckbox:SetChecked(FRD_Settings.autoMode)
+        economyCheckbox:SetChecked(FRD_Settings.economyShieldEnabled)
+        local resetEconomyValue = FRD_Settings.economyShieldThreshold or 50
+        if resetEconomyValue < 1 then resetEconomyValue = 1 end
+        if resetEconomyValue > 100 then resetEconomyValue = 100 end
+        economySlider:SetValue(resetEconomyValue)
         slider2:SetValue(FRD_Settings.checkInterval)
         monitorCheckbox:SetChecked(FRD_Settings.monitorEnabled)
         slider3:SetValue(FRD_Settings.monitorInterval or 0.5)
         monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
         repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
+        FRD:ResetEconomyShieldPendingFromSettings()
         frame:Hide()
     end)
 
@@ -1106,6 +1582,8 @@ function FRD:CreateSettingsFrame()
         "插件功能简介",
         "· 自动切换力反馈盾牌（需背包有多块）；单块仅监控，不自动切换。",
         "· 勾选主动模式：战斗中自动检测并切换盾牌。",
+        "· 勤俭盾牌：战斗中血量高于阈值使用指定非力反馈盾牌，低于阈值后切回力反馈盾牌。",
+        "· 勤俭盾牌设置：拖拽背包盾牌到图标或点击图标使用当前副手，右键清除。",
         "· 如果不希望主动侦测，或者自动模式遇到使用问题，可将 /frd 绑定技能宏触发检测。",
         "· 小地图图标：右键可切换插件开关。",
         "",
@@ -1146,6 +1624,7 @@ function FRD:CreateSettingsFrame()
     end)
     
     self.settingsFrame = frame
+    self:ResetEconomyShieldPendingFromSettings()
 end
 
 -- 注册斜杠命令
