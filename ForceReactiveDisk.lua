@@ -338,6 +338,9 @@ function FRD:UpdateMonitorText(force)
 
     local economyEntry = self:GetEconomyShieldMonitorEntry()
     if economyEntry then
+        if frdCount > 0 then
+            table.insert(entries, { isSpacer = true })
+        end
         table.insert(entries, economyEntry)
     end
 
@@ -397,22 +400,36 @@ function FRD:UpdateMonitorText(force)
         local row = math.floor((i - 1) / usedCols)
         iconFrame:SetPoint("TOPLEFT", self.monitorFrame.iconContainer, "TOPLEFT", col * (iconSize + padding), -row * (iconSize + 18))
 
-        iconFrame.icon:SetTexture(entry.texture)
-        if entry.isEconomy then
-            local labelColor = entry.found and "|cff00ff00" or "|cff888888"
-            iconFrame.text:SetText(labelColor .. "勤俭盾牌|r")
+        if entry.isSpacer then
+            iconFrame.icon:Hide()
+            iconFrame.text:SetText("")
+            iconFrame.bg:SetTexture(0, 0, 0, 0)
+            iconFrame.bag = nil
+            iconFrame.slot = nil
+            iconFrame.isEconomy = nil
+            iconFrame.isSpacer = true
+            iconFrame:EnableMouse(false)
         else
-            local colorCode = self:FormatDurabilityColor(entry.durability)
-            iconFrame.text:SetText(colorCode .. string.format("%.0f", entry.durability) .. "%|r")
-        end
-        iconFrame.bag = entry.bag
-        iconFrame.slot = entry.slot
-        iconFrame.isEconomy = entry.isEconomy
+            iconFrame.icon:Show()
+            iconFrame.icon:SetTexture(entry.texture)
+            if entry.isEconomy then
+                local labelColor = entry.found and "|cff00ff00" or "|cff888888"
+                iconFrame.text:SetText(labelColor .. "勤俭盾牌|r")
+            else
+                local colorCode = self:FormatDurabilityColor(entry.durability)
+                iconFrame.text:SetText(colorCode .. string.format("%.0f", entry.durability) .. "%|r")
+            end
+            iconFrame.bag = entry.bag
+            iconFrame.slot = entry.slot
+            iconFrame.isEconomy = entry.isEconomy
+            iconFrame.isSpacer = nil
+            iconFrame:EnableMouse(true)
 
-        if entry.equipped then
-            iconFrame.bg:SetTexture(0, 0.5, 0, 0.5)
-        else
-            iconFrame.bg:SetTexture(0, 0, 0, 0.5)
+            if entry.equipped then
+                iconFrame.bg:SetTexture(0, 0.5, 0, 0.5)
+            else
+                iconFrame.bg:SetTexture(0, 0, 0, 0.5)
+            end
         end
 
         iconFrame:Show()
@@ -874,6 +891,52 @@ function FRD:GetEconomyShieldMonitorEntry()
     return entry
 end
 
+-- 力反馈盾牌全部损坏时强制切换勤俭盾牌
+function FRD:TryEquipEconomyShieldWhenAllDisksBroken(silent, offhandIsDisk, currentDurability, disks)
+    if not FRD_Settings.economyShieldEnabled then
+        return false
+    end
+    if not self:GetEconomyShieldItemId() then
+        return false
+    end
+
+    local totalDisks = table.getn(disks) + (offhandIsDisk and 1 or 0)
+    if totalDisks <= 0 then
+        return false
+    end
+
+    local allBroken = true
+    if offhandIsDisk and currentDurability and currentDurability > 0 then
+        allBroken = false
+    end
+    for i = 1, table.getn(disks) do
+        if disks[i].durability > 0 then
+            allBroken = false
+            break
+        end
+    end
+
+    if not allBroken then
+        return false
+    end
+
+    local economy = self:FindEconomyShield()
+    if economy then
+        if economy.equipped then
+            return true
+        end
+        if economy.bag and economy.slot then
+            self:EquipDisk(economy.bag, economy.slot)
+            if not silent then
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[FRD]|r 所有力反馈盾牌耐久为0，已强制切换到勤俭盾牌")
+            end
+            return true
+        end
+    end
+
+    return false
+end
+
 -- 装备盾牌
 function FRD:EquipDisk(bag, slot)
     PickupContainerItem(bag, slot)
@@ -910,11 +973,22 @@ function FRD:CheckAndSwapDisk(silent)
         return
     end
 
+    local offhandIsDisk = self:IsOffhandForceReactiveDisk()
+    local currentDurability = nil
+    if offhandIsDisk then
+        currentDurability = self:GetOffhandDurability()
+    end
+    local disks = self:FindAllDisksInBags()
+    local bagCount = table.getn(disks)
+
+    if self:TryEquipEconomyShieldWhenAllDisksBroken(silent, offhandIsDisk, currentDurability, disks) then
+        return
+    end
+
     -- 检查副手是否装备力反馈盾牌
-    if not self:IsOffhandForceReactiveDisk() then
+    if not offhandIsDisk then
         -- 副手没有装备力反馈盾牌，寻找背包中的盾牌
-        local disks = self:FindAllDisksInBags()
-        if table.getn(disks) > 0 then
+        if bagCount > 0 then
             -- 按耐久度排序，选择耐久度最高的
             table.sort(disks, function(a, b) return a.durability > b.durability end)
             self:EquipDisk(disks[1].bag, disks[1].slot)
@@ -930,10 +1004,7 @@ function FRD:CheckAndSwapDisk(silent)
     end
     
     -- 副手已装备力反馈盾牌,检查耐久度
-    local currentDurability = self:GetOffhandDurability()
     local threshold = FRD_Settings.durabilityThreshold or 30
-    local disks = self:FindAllDisksInBags()
-    local bagCount = table.getn(disks)
 
     if bagCount > 0 then
         table.sort(disks, function(a, b) return a.durability > b.durability end)
