@@ -2,7 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
-local FRD_VERSION = 2.0
+local FRD_VERSION = 2.01
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -39,6 +39,8 @@ FRD.warnedEconomyShieldMissing = false
 FRD.economyShieldLockedInCombat = false
 FRD.economyShieldCache = nil
 FRD.economyShieldCacheDirty = true
+FRD.disksCache = nil
+FRD.disksCacheDirty = true
 
 FRD:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
@@ -117,11 +119,13 @@ FRD:SetScript("OnEvent", function()
         FRD:UpdateMonitorVisibility(true)
         FRD:CheckRepairReminder()
     elseif event == "BAG_UPDATE" or event == "UPDATE_INVENTORY_ALERTS" then
+        FRD:MarkDiskCacheDirty()
         FRD:MarkEconomyShieldCacheDirty()
         FRD:UpdateMonitorText(false)
         FRD:CheckRepairReminder()
     elseif event == "UNIT_INVENTORY_CHANGED" then
         if arg1 == "player" then
+            FRD:MarkDiskCacheDirty()
             FRD:MarkEconomyShieldCacheDirty()
             FRD:UpdateMonitorText(false)
             FRD:CheckRepairReminder()
@@ -606,20 +610,7 @@ end
 
 -- 查找背包中所有力反馈盾牌
 function FRD:FindAllDisksInBags()
-    local disks = {}
-    for bag = 0, 4 do
-        for slot = 1, GetContainerNumSlots(bag) do
-            if self:IsForceReactiveDisk(bag, slot) then
-                local durability = self:GetItemDurability(bag, slot)
-                table.insert(disks, {
-                    bag = bag,
-                    slot = slot,
-                    durability = durability
-                })
-            end
-        end
-    end
-    return disks
+    return self:GetDisksCache()
 end
 
 -- 检查副手是否装备力反馈盾牌
@@ -757,6 +748,44 @@ end
 function FRD:ClearEconomyShieldCache()
     self.economyShieldCache = nil
     self.economyShieldCacheDirty = true
+end
+
+function FRD:MarkDiskCacheDirty()
+    self.disksCacheDirty = true
+end
+
+function FRD:ClearDiskCache()
+    self.disksCache = nil
+    self.disksCacheDirty = true
+end
+
+function FRD:UpdateDiskCache()
+    local cache = self.disksCache or {}
+    for i = table.getn(cache), 1, -1 do
+        cache[i] = nil
+    end
+    for bag = 0, 4 do
+        for slot = 1, GetContainerNumSlots(bag) do
+            if self:IsForceReactiveDisk(bag, slot) then
+                local durability = self:GetItemDurability(bag, slot)
+                table.insert(cache, {
+                    bag = bag,
+                    slot = slot,
+                    durability = durability
+                })
+            end
+        end
+    end
+    self.disksCache = cache
+    self.disksCacheDirty = false
+    return cache
+end
+
+function FRD:GetDisksCache()
+    if self.disksCacheDirty or not self.disksCache then
+        return self:UpdateDiskCache()
+    end
+    return self.disksCache
 end
 
 function FRD:UpdateEconomyShieldCache(itemId)
@@ -1442,6 +1471,7 @@ function FRD:ApplyEconomyShieldPendingToSettings()
     end
     self.warnedEconomyShieldMissing = false
     self:ClearEconomyShieldCache()
+    self:ClearDiskCache()
 end
 
 -- 从光标设置勤俭盾牌
