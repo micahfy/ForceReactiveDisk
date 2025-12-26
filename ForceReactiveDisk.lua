@@ -2,7 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
-local FRD_VERSION = 2.01
+local FRD_VERSION = 2.02
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -41,6 +41,9 @@ FRD.economyShieldCache = nil
 FRD.economyShieldCacheDirty = true
 FRD.disksCache = nil
 FRD.disksCacheDirty = true
+FRD.disksCacheThrottle = 0.3
+FRD.disksCacheUpdateScheduled = false
+FRD.lastDiskCacheUpdate = 0
 
 FRD:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
@@ -752,14 +755,27 @@ end
 
 function FRD:MarkDiskCacheDirty()
     self.disksCacheDirty = true
+    if self.disksCacheUpdateScheduled then
+        return
+    end
+    self.disksCacheUpdateScheduled = true
+    local delay = self.disksCacheThrottle or 0.3
+    self:ScheduleTimer(function()
+        FRD.disksCacheUpdateScheduled = false
+        if FRD.disksCacheDirty then
+            FRD:UpdateDiskCache()
+        end
+    end, delay)
 end
 
 function FRD:ClearDiskCache()
     self.disksCache = nil
     self.disksCacheDirty = true
+    self.lastDiskCacheUpdate = 0
 end
 
 function FRD:UpdateDiskCache()
+    self.lastDiskCacheUpdate = GetTime()
     local cache = self.disksCache or {}
     for i = table.getn(cache), 1, -1 do
         cache[i] = nil
@@ -782,7 +798,15 @@ function FRD:UpdateDiskCache()
 end
 
 function FRD:GetDisksCache()
-    if self.disksCacheDirty or not self.disksCache then
+    if not self.disksCache then
+        return self:UpdateDiskCache()
+    end
+    if self.disksCacheDirty then
+        local now = GetTime()
+        local throttle = self.disksCacheThrottle or 0.3
+        if self.lastDiskCacheUpdate > 0 and (now - self.lastDiskCacheUpdate) < throttle then
+            return self.disksCache
+        end
         return self:UpdateDiskCache()
     end
     return self.disksCache
@@ -806,7 +830,7 @@ function FRD:UpdateEconomyShieldCache(itemId)
             cache.found = true
             cache.equipped = true
             cache.texture = GetInventoryItemTexture("player", 17)
-            cache.durability = self:GetOffhandDurability()
+            cache.durability = nil
             self.economyShieldCache = cache
             self.economyShieldCacheDirty = false
             self.warnedEconomyShieldMissing = false
@@ -833,7 +857,7 @@ function FRD:UpdateEconomyShieldCache(itemId)
                 cache.bag = cachedBag
                 cache.slot = cachedSlot
                 cache.texture = texture or "Interface\\Icons\\INV_Shield_05"
-                cache.durability = self:GetItemDurability(cachedBag, cachedSlot)
+                cache.durability = nil
                 self.economyShieldCache = cache
                 self.economyShieldCacheDirty = false
                 self.warnedEconomyShieldMissing = false
@@ -862,7 +886,7 @@ function FRD:UpdateEconomyShieldCache(itemId)
                     cache.bag = bag
                     cache.slot = slot
                     cache.texture = texture or "Interface\\Icons\\INV_Shield_05"
-                    cache.durability = self:GetItemDurability(bag, slot)
+                    cache.durability = nil
                     self.economyShieldCache = cache
                     self.economyShieldCacheDirty = false
                     self.warnedEconomyShieldMissing = false
@@ -900,11 +924,10 @@ function FRD:RefreshEconomyShieldCacheInfo(cache)
     end
     if cache.equipped then
         cache.texture = GetInventoryItemTexture("player", 17)
-        cache.durability = self:GetOffhandDurability()
+        cache.durability = nil
         return cache
     end
     if cache.bag and cache.slot then
-        cache.durability = self:GetItemDurability(cache.bag, cache.slot)
         if GetContainerItemInfo then
             local tex = GetContainerItemInfo(cache.bag, cache.slot)
             if type(tex) == "table" then
