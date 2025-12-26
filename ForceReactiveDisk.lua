@@ -2,7 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
-local FRD_VERSION = 2.02
+local FRD_VERSION = 2.03
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -291,10 +291,12 @@ function FRD:UpdateMonitorText(force)
     local best = nil
     local worst = nil
     if bagCount > 0 then
-        for i = 1, bagCount do
-            local d = disks[i].durability
-            if not best or d > best then best = d end
-            if not worst or d < worst then worst = d end
+        for _, disk in ipairs(disks) do
+            if disk and disk.durability then
+                local d = disk.durability
+                if not best or d > best then best = d end
+                if not worst or d < worst then worst = d end
+            end
         end
     end
 
@@ -315,28 +317,29 @@ function FRD:UpdateMonitorText(force)
 
     if bagCount > 0 then
         table.sort(disks, function(a, b) return a.durability > b.durability end)
-        for i = 1, bagCount do
-            local d = disks[i]
-            local texture
-            if GetContainerItemInfo then
-                local tex = GetContainerItemInfo(d.bag, d.slot)
-                if type(tex) == "table" then
-                    texture = tex.icon
-                else
-                    texture = tex
+        for _, disk in ipairs(disks) do
+            if disk and disk.durability then
+                local texture
+                if GetContainerItemInfo then
+                    local tex = GetContainerItemInfo(disk.bag, disk.slot)
+                    if type(tex) == "table" then
+                        texture = tex.icon
+                    else
+                        texture = tex
+                    end
                 end
+                texture = texture or "Interface\\Icons\\INV_Shield_21"
+                table.insert(entries, {
+                    label = "包" .. disk.bag .. "槽" .. disk.slot,
+                    durability = disk.durability,
+                    texture = texture,
+                    equipped = false,
+                    bag = disk.bag,
+                    slot = disk.slot
+                })
+                frdTotalDur = frdTotalDur + disk.durability
+                frdCount = frdCount + 1
             end
-            texture = texture or "Interface\\Icons\\INV_Shield_21"
-            table.insert(entries, {
-                label = "包" .. d.bag .. "槽" .. d.slot,
-                durability = d.durability,
-                texture = texture,
-                equipped = false,
-                bag = d.bag,
-                slot = d.slot
-            })
-            frdTotalDur = frdTotalDur + d.durability
-            frdCount = frdCount + 1
         end
     end
 
@@ -776,10 +779,7 @@ end
 
 function FRD:UpdateDiskCache()
     self.lastDiskCacheUpdate = GetTime()
-    local cache = self.disksCache or {}
-    for i = table.getn(cache), 1, -1 do
-        cache[i] = nil
-    end
+    local cache = {}
     for bag = 0, 4 do
         for slot = 1, GetContainerNumSlots(bag) do
             if self:IsForceReactiveDisk(bag, slot) then
@@ -1075,8 +1075,8 @@ function FRD:TryEquipEconomyShieldWhenAllDisksBroken(silent, offhandIsDisk, curr
     if offhandIsDisk and currentDurability and currentDurability > 0 then
         allBroken = false
     end
-    for i = 1, table.getn(disks) do
-        if disks[i].durability > 0 then
+    for _, disk in ipairs(disks) do
+        if disk and disk.durability and disk.durability > 0 then
             allBroken = false
             break
         end
