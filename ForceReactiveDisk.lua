@@ -37,6 +37,8 @@ FRD.inCombat = false
 FRD.warnedAllBelowTwo = false
 FRD.warnedEconomyShieldMissing = false
 FRD.economyShieldLockedInCombat = false
+FRD.economyShieldCache = nil
+FRD.economyShieldCacheDirty = true
 
 FRD:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
@@ -115,10 +117,12 @@ FRD:SetScript("OnEvent", function()
         FRD:UpdateMonitorVisibility(true)
         FRD:CheckRepairReminder()
     elseif event == "BAG_UPDATE" or event == "UPDATE_INVENTORY_ALERTS" then
+        FRD:MarkEconomyShieldCacheDirty()
         FRD:UpdateMonitorText(false)
         FRD:CheckRepairReminder()
     elseif event == "UNIT_INVENTORY_CHANGED" then
         if arg1 == "player" then
+            FRD:MarkEconomyShieldCacheDirty()
             FRD:UpdateMonitorText(false)
             FRD:CheckRepairReminder()
         end
@@ -746,32 +750,66 @@ function FRD:GetCursorItemInfo()
     return nil
 end
 
--- 获取玩家当前血量百分比
-function FRD:GetPlayerHealthPercent()
-    local maxHealth = UnitHealthMax("player")
-    if not maxHealth or maxHealth <= 0 then
-        return 0
-    end
-    return (UnitHealth("player") / maxHealth) * 100
+function FRD:MarkEconomyShieldCacheDirty()
+    self.economyShieldCacheDirty = true
 end
 
--- 查找勤俭盾牌（副手优先，其次背包）
-function FRD:FindEconomyShield()
-    local itemId = self:GetEconomyShieldItemId()
-    if not itemId then
-        return nil
-    end
+function FRD:ClearEconomyShieldCache()
+    self.economyShieldCache = nil
+    self.economyShieldCacheDirty = true
+end
+
+function FRD:UpdateEconomyShieldCache(itemId)
+    local cache = self.economyShieldCache or {}
+    local cachedBag = cache.bag
+    local cachedSlot = cache.slot
+    cache.found = false
+    cache.equipped = false
+    cache.bag = nil
+    cache.slot = nil
+    cache.texture = nil
+    cache.durability = nil
 
     local offhandLink = GetInventoryItemLink("player", 17)
     if offhandLink then
         local offhandId = self:GetItemIdFromLink(offhandLink)
         if offhandId and offhandId == itemId and offhandId ~= FORCE_REACTIVE_DISK_ID then
+            cache.found = true
+            cache.equipped = true
+            cache.texture = GetInventoryItemTexture("player", 17)
+            cache.durability = self:GetOffhandDurability()
+            self.economyShieldCache = cache
+            self.economyShieldCacheDirty = false
             self.warnedEconomyShieldMissing = false
-            return {
-                equipped = true,
-                durability = self:GetOffhandDurability(),
-                texture = GetInventoryItemTexture("player", 17)
-            }
+            return cache
+        end
+    end
+
+    if cachedBag and cachedSlot then
+        local link = GetContainerItemLink(cachedBag, cachedSlot)
+        if link then
+            local id = self:GetItemIdFromLink(link)
+            if id and id == itemId and id ~= FORCE_REACTIVE_DISK_ID then
+                local texture
+                if GetContainerItemInfo then
+                    local tex = GetContainerItemInfo(cachedBag, cachedSlot)
+                    if type(tex) == "table" then
+                        texture = tex.icon
+                    else
+                        texture = tex
+                    end
+                end
+                cache.found = true
+                cache.equipped = false
+                cache.bag = cachedBag
+                cache.slot = cachedSlot
+                cache.texture = texture or "Interface\\Icons\\INV_Shield_05"
+                cache.durability = self:GetItemDurability(cachedBag, cachedSlot)
+                self.economyShieldCache = cache
+                self.economyShieldCacheDirty = false
+                self.warnedEconomyShieldMissing = false
+                return cache
+            end
         end
     end
 
@@ -790,20 +828,86 @@ function FRD:FindEconomyShield()
                             texture = tex
                         end
                     end
+                    cache.found = true
+                    cache.equipped = false
+                    cache.bag = bag
+                    cache.slot = slot
+                    cache.texture = texture or "Interface\\Icons\\INV_Shield_05"
+                    cache.durability = self:GetItemDurability(bag, slot)
+                    self.economyShieldCache = cache
+                    self.economyShieldCacheDirty = false
                     self.warnedEconomyShieldMissing = false
-                    return {
-                        bag = bag,
-                        slot = slot,
-                        durability = self:GetItemDurability(bag, slot),
-                        texture = texture or "Interface\\Icons\\INV_Shield_05",
-                        equipped = false
-                    }
+                    return cache
                 end
             end
         end
     end
 
+    self.economyShieldCache = cache
+    self.economyShieldCacheDirty = false
     return nil
+end
+
+function FRD:GetEconomyShieldCache()
+    if not FRD_Settings.economyShieldEnabled then
+        return nil
+    end
+    local itemId = self:GetEconomyShieldItemId()
+    if not itemId then
+        return nil
+    end
+    if self.economyShieldCacheDirty or not self.economyShieldCache then
+        return self:UpdateEconomyShieldCache(itemId)
+    end
+    if not self.economyShieldCache.found then
+        return nil
+    end
+    return self.economyShieldCache
+end
+
+function FRD:RefreshEconomyShieldCacheInfo(cache)
+    if not cache or not cache.found then
+        return cache
+    end
+    if cache.equipped then
+        cache.texture = GetInventoryItemTexture("player", 17)
+        cache.durability = self:GetOffhandDurability()
+        return cache
+    end
+    if cache.bag and cache.slot then
+        cache.durability = self:GetItemDurability(cache.bag, cache.slot)
+        if GetContainerItemInfo then
+            local tex = GetContainerItemInfo(cache.bag, cache.slot)
+            if type(tex) == "table" then
+                cache.texture = tex.icon or cache.texture
+            else
+                cache.texture = tex or cache.texture
+            end
+        end
+    end
+    return cache
+end
+
+-- 获取玩家当前血量百分比
+function FRD:GetPlayerHealthPercent()
+    local maxHealth = UnitHealthMax("player")
+    if not maxHealth or maxHealth <= 0 then
+        return 0
+    end
+    return (UnitHealth("player") / maxHealth) * 100
+end
+
+-- 查找勤俭盾牌（副手优先，其次背包）
+function FRD:FindEconomyShield()
+    local cache = self:GetEconomyShieldCache()
+    if not cache then
+        return nil
+    end
+    cache = self:RefreshEconomyShieldCacheInfo(cache)
+    if not cache or not cache.found then
+        return nil
+    end
+    return cache
 end
 
 -- 装备勤俭盾牌
@@ -1337,6 +1441,7 @@ function FRD:ApplyEconomyShieldPendingToSettings()
         FRD_Settings.economyShieldTexture = nil
     end
     self.warnedEconomyShieldMissing = false
+    self:ClearEconomyShieldCache()
 end
 
 -- 从光标设置勤俭盾牌
@@ -1394,7 +1499,7 @@ function FRD:CreateSettingsFrame()
     -- 耐久度阈值标签
     local label1 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label1:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -60)
-    label1:SetText("切换耐久度阈值 (%):")
+    label1:SetText("耐久度切换阈值 (%):")
     
     -- 耐久度滑块
     local slider1 = CreateFrame("Slider", "FRDDurabilitySlider", frame, "OptionsSliderTemplate")
@@ -1446,7 +1551,7 @@ function FRD:CreateSettingsFrame()
 
     local economyTitle = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     economyTitle:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -8)
-    economyTitle:SetText("勤俭盾牌模块")
+    economyTitle:SetText("勤俭盾牌模块（试验功能）")
 
     -- 勤俭盾牌开关
     local economyCheckbox = CreateFrame("CheckButton", "FRDEconomyShieldCheckbox", economyPanel, "UICheckButtonTemplate")
@@ -1459,12 +1564,12 @@ function FRD:CreateSettingsFrame()
     economyLabel:SetPoint("LEFT", economyCheckbox, "RIGHT", 5, 0)
     economyLabel:SetWidth(255)
     economyLabel:SetJustifyH("LEFT")
-    economyLabel:SetText("启用勤俭盾牌（低血量前使用非力反馈盾牌）")
+    economyLabel:SetText("勤俭盾牌（首次低血量前使用常规盾牌）")
 
     -- 勤俭盾牌血量阈值
     local economyLabel2 = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     economyLabel2:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -50)
-    economyLabel2:SetText("勤俭盾牌血量阈值 (%):")
+    economyLabel2:SetText("勤俭盾牌切换的血量阈值 (%):")
 
     local economySlider = CreateFrame("Slider", "FRDEconomyThresholdSlider", economyPanel, "OptionsSliderTemplate")
     economySlider:SetPoint("TOP", economyPanel, "TOP", 0, -70)
@@ -1489,7 +1594,7 @@ function FRD:CreateSettingsFrame()
     -- 勤俭盾牌设置
     local economyLabel3 = economyPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     economyLabel3:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -98)
-    economyLabel3:SetText("勤俭盾牌设置:")
+    economyLabel3:SetText("勤俭盾牌设置:（将盾牌拖到下面的图标上）")
 
     local economyButton = CreateFrame("Button", "FRDEconomyShieldButton", economyPanel)
     economyButton:SetPoint("TOPLEFT", economyPanel, "TOPLEFT", 10, -116)
