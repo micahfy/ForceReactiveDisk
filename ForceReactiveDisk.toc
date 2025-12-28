@@ -2,7 +2,7 @@
 ## Title: 力反馈盾牌管理
 ## Notes: 自动管理和切换力反馈盾牌
 ## Author: 安娜希尔
-## Version: 2.06
+## Version: 2.07
 ## SavedVariables: FRD_Settings
 
 ForceReactiveDisk.lua

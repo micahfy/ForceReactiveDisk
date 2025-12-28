@@ -2,7 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
-local FRD_VERSION = 2.06
+local FRD_VERSION = 2.07
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -242,6 +242,45 @@ function FRD:CreateMonitorFrame()
     frame.iconContainer = container
     frame.icons = {}
 
+    local restorePanel = CreateFrame("Frame", nil, frame)
+    restorePanel:SetPoint("TOPLEFT", container, "BOTTOMLEFT", 0, -6)
+    restorePanel:SetWidth(280)
+    restorePanel:SetHeight(24)
+    restorePanel:Hide()
+    frame.restorePanel = restorePanel
+
+    local restoreText = restorePanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    restoreText:SetPoint("LEFT", restorePanel, "LEFT", 0, 0)
+    restoreText:SetWidth(130)
+    restoreText:SetJustifyH("LEFT")
+    restoreText:SetText("")
+    restorePanel.text = restoreText
+
+    local restoreAdd = CreateFrame("Button", nil, restorePanel, "UIPanelButtonTemplate")
+    restoreAdd:SetPoint("RIGHT", restorePanel, "RIGHT", 0, 0)
+    restoreAdd:SetWidth(62)
+    restoreAdd:SetHeight(18)
+    restoreAdd:SetText("+15秒")
+    restorePanel.addButton = restoreAdd
+
+    local restoreNow = CreateFrame("Button", nil, restorePanel, "UIPanelButtonTemplate")
+    restoreNow:SetPoint("RIGHT", restoreAdd, "LEFT", -6, 0)
+    restoreNow:SetWidth(70)
+    restoreNow:SetHeight(18)
+    restoreNow:SetText("立即替换")
+    restorePanel.nowButton = restoreNow
+
+    restoreAdd:SetScript("OnClick", function()
+        FRD:ExtendArgentDawnRestore(15)
+    end)
+    restoreNow:SetScript("OnClick", function()
+        if FRD.inCombat then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 战斗中无法替换饰品")
+            return
+        end
+        FRD:TryRestoreArgentDawnTrinket()
+    end)
+
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
@@ -400,10 +439,17 @@ function FRD:UpdateMonitorText(force)
     local iconSize = 36
     local padding = 6
 
+    local showRestore = self.restoreTrinketReadyTime
+        and FRD_Settings.autoEquipArgentDawn
+        and FRD_Settings.autoEquipArgentDawnRestoreEnabled
+
     local usedCols = totalCount > 0 and math.min(columns, totalCount) or 1
     local rows = math.max(1, math.ceil(totalCount / usedCols))
     local contentWidth = usedCols * (iconSize + padding) - padding
     if contentWidth < 120 then contentWidth = 120 end
+    if showRestore and contentWidth < 270 then
+        contentWidth = 270
+    end
     local frameWidth = contentWidth + 20
     local contentHeight = rows * (iconSize + 18)
     local frameHeight = 40 + contentHeight
@@ -412,6 +458,30 @@ function FRD:UpdateMonitorText(force)
     self.monitorFrame.header:SetWidth(frameWidth - 20)
     self.monitorFrame.iconContainer:SetWidth(contentWidth)
     self.monitorFrame.iconContainer:SetHeight(contentHeight)
+
+    if self.monitorFrame.restorePanel then
+        local restorePanel = self.monitorFrame.restorePanel
+        if showRestore then
+            local remaining = math.ceil(self.restoreTrinketReadyTime - GetTime())
+            if remaining < 0 then remaining = 0 end
+            if self.inCombat then
+                restorePanel.text:SetText("|cffff9900战斗中暂停|r")
+                restorePanel.addButton:Disable()
+                restorePanel.nowButton:Disable()
+            else
+                restorePanel.text:SetText(string.format("饰品恢复: %d秒", remaining))
+                restorePanel.addButton:Enable()
+                restorePanel.nowButton:Enable()
+            end
+            restorePanel:SetWidth(frameWidth - 20)
+            restorePanel:ClearAllPoints()
+            restorePanel:SetPoint("TOPLEFT", self.monitorFrame.iconContainer, "BOTTOMLEFT", 0, -8)
+            restorePanel:Show()
+            frameHeight = frameHeight + 32
+        else
+            restorePanel:Hide()
+        end
+    end
 
     for i = 1, totalCount do
         local entry = entries[i]
@@ -1199,6 +1269,12 @@ function FRD:EquipTrinket(bag, slot, invSlot)
     PickupInventoryItem(invSlot)
 end
 
+function FRD:RefreshMonitorTextIfVisible()
+    if self.monitorFrame and self.monitorFrame:IsShown() then
+        self:UpdateMonitorText(true)
+    end
+end
+
 function FRD:SetArgentDawnRestoreTarget(itemLink, itemId)
     self.restoreTrinketItemLink = itemLink
     self.restoreTrinketItemId = itemId
@@ -1211,6 +1287,7 @@ function FRD:ClearArgentDawnRestoreTarget()
     self.restoreTrinketItemId = nil
     self.restoreTrinketWarnedMissing = false
     self:StopArgentDawnRestoreTimer()
+    self:RefreshMonitorTextIfVisible()
 end
 
 function FRD:ScheduleArgentDawnRestore()
@@ -1225,6 +1302,18 @@ function FRD:ScheduleArgentDawnRestore()
     if not self.inCombat then
         self:StartArgentDawnRestoreTimer()
     end
+    self:RefreshMonitorTextIfVisible()
+end
+
+function FRD:ExtendArgentDawnRestore(seconds)
+    if not self.restoreTrinketReadyTime then
+        return
+    end
+    self.restoreTrinketReadyTime = self.restoreTrinketReadyTime + seconds
+    if not self.inCombat then
+        self:StartArgentDawnRestoreTimer()
+    end
+    self:RefreshMonitorTextIfVisible()
 end
 
 function FRD:ResumeArgentDawnRestore()
@@ -1242,6 +1331,7 @@ function FRD:ResumeArgentDawnRestore()
     if GetTime() >= self.restoreTrinketReadyTime then
         self:TryRestoreArgentDawnTrinket()
     end
+    self:RefreshMonitorTextIfVisible()
 end
 
 function FRD:StartArgentDawnRestoreTimer()
@@ -1309,6 +1399,7 @@ function FRD:TryRestoreArgentDawnTrinket()
 
     self:EquipTrinket(bag, slot, 13)
     self:ClearArgentDawnRestoreTarget()
+    self:RefreshMonitorTextIfVisible()
 end
 
 function FRD:AutoEquipArgentDawnTrinket()
@@ -2229,6 +2320,7 @@ function FRD:CreateSettingsFrame()
         "· 小地图图标：右键可切换插件开关。",
         "· 脱战后自动装备银色黎明徽记到饰品栏1。",
         "· 可设置脱战后在指定时间恢复原本饰品。",
+        "· 监控中显示饰品恢复倒计时，可+15秒或立即替换。",
         "",
         "· 作者：安娜希尔",
         "",
