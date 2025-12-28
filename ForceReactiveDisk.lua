@@ -2,7 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
-local FRD_VERSION = 2.03
+local FRD_VERSION = 2.05
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -13,6 +13,7 @@ FRD_Settings = {
     enabled = true, -- 插件开关
     economyShieldEnabled = false, -- 启用勤俭盾牌
     economyShieldThreshold = 50, -- 勤俭盾牌血量阈值(%)
+    autoEquipArgentDawn = false, -- 脱战后自动装备银色黎明徽记
     monitorEnabled = false, -- 战斗中显示耐久监控
     monitorInterval = 0.5, -- 监控刷新频率（秒）
     monitorShowOOC = false, -- 脱战后也显示监控
@@ -85,6 +86,9 @@ FRD:SetScript("OnEvent", function()
         if FRD_Settings.repairReminderEnabled == nil then
             FRD_Settings.repairReminderEnabled = true
         end
+        if FRD_Settings.autoEquipArgentDawn == nil then
+            FRD_Settings.autoEquipArgentDawn = false
+        end
         if not FRD_Settings.repairReminderPosition then
             FRD_Settings.repairReminderPosition = { point = "TOP", relativePoint = "TOP", x = 0, y = -120 }
         end
@@ -121,6 +125,7 @@ FRD:SetScript("OnEvent", function()
         end
         FRD:UpdateMonitorVisibility(true)
         FRD:CheckRepairReminder()
+        FRD:AutoEquipArgentDawnTrinket()
     elseif event == "BAG_UPDATE" or event == "UPDATE_INVENTORY_ALERTS" then
         FRD:MarkDiskCacheDirty()
         FRD:MarkEconomyShieldCacheDirty()
@@ -151,6 +156,11 @@ function FRD:MigrateSettings(oldVersion)
         end
         if not FRD_Settings.economyShieldThreshold then
             FRD_Settings.economyShieldThreshold = 50
+        end
+    end
+    if oldVersion < 2.04 then
+        if FRD_Settings.autoEquipArgentDawn == nil then
+            FRD_Settings.autoEquipArgentDawn = false
         end
     end
 end
@@ -1103,6 +1113,71 @@ function FRD:TryEquipEconomyShieldWhenAllDisksBroken(silent, offhandIsDisk, curr
     return false
 end
 
+function FRD:GetArgentDawnTrinketPriority(itemId)
+    if itemId == 236351 or itemId == 236352 then
+        return 1
+    end
+    if itemId == 19812 or itemId == 13209 then
+        return 2
+    end
+    if itemId == 12846 then
+        return 3
+    end
+    return nil
+end
+
+function FRD:FindBestArgentDawnTrinket()
+    local best = nil
+    local bestPriority = nil
+    for bag = 0, 4 do
+        for slot = 1, GetContainerNumSlots(bag) do
+            local link = GetContainerItemLink(bag, slot)
+            if link then
+                local itemId = self:GetItemIdFromLink(link)
+                local priority = self:GetArgentDawnTrinketPriority(itemId)
+                if priority then
+                    if not bestPriority or priority < bestPriority then
+                        bestPriority = priority
+                        best = { bag = bag, slot = slot, itemId = itemId, priority = priority }
+                        if priority == 1 then
+                            return best
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+function FRD:EquipTrinket(bag, slot, invSlot)
+    PickupContainerItem(bag, slot)
+    PickupInventoryItem(invSlot)
+end
+
+function FRD:AutoEquipArgentDawnTrinket()
+    if not FRD_Settings.enabled or not FRD_Settings.autoEquipArgentDawn then
+        return
+    end
+
+    local best = self:FindBestArgentDawnTrinket()
+    if not best then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 背包内没有符合条件的银色黎明徽记，请检查背包")
+        return
+    end
+
+    local equippedLink = GetInventoryItemLink("player", 13)
+    if equippedLink then
+        local equippedId = self:GetItemIdFromLink(equippedLink)
+        local equippedPriority = self:GetArgentDawnTrinketPriority(equippedId)
+        if equippedPriority and equippedPriority <= best.priority then
+            return
+        end
+    end
+
+    self:EquipTrinket(best.bag, best.slot, 13)
+end
+
 -- 装备盾牌
 function FRD:EquipDisk(bag, slot)
     PickupContainerItem(bag, slot)
@@ -1529,7 +1604,7 @@ end
 function FRD:CreateSettingsFrame()
     local frame = CreateFrame("Frame", "FRDSettingsFrame", UIParent)
     frame:SetWidth(350)
-    frame:SetHeight(560)
+    frame:SetHeight(600)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -1782,7 +1857,8 @@ function FRD:CreateSettingsFrame()
         monitorEnabled = FRD_Settings.monitorEnabled,
         monitorInterval = monitorIntervalValue,
         monitorShowOOC = FRD_Settings.monitorShowOOC,
-        repairReminderEnabled = FRD_Settings.repairReminderEnabled
+        repairReminderEnabled = FRD_Settings.repairReminderEnabled,
+        autoEquipArgentDawn = FRD_Settings.autoEquipArgentDawn
     }
 
     -- 脱战也显示监控复选框
@@ -1810,6 +1886,19 @@ function FRD:CreateSettingsFrame()
     repairLabel:SetWidth(260)
     repairLabel:SetJustifyH("LEFT")
     repairLabel:SetText("脱战后若盾牌低于90%提醒修理")
+
+    -- 脱战自动装备银色黎明徽记
+    local argentCheckbox = CreateFrame("CheckButton", "FRDAutoEquipArgentDawnCheckbox", frame, "UICheckButtonTemplate")
+    argentCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -480)
+    argentCheckbox:SetWidth(24)
+    argentCheckbox:SetHeight(24)
+    argentCheckbox:SetChecked(FRD_Settings.autoEquipArgentDawn)
+
+    local argentLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    argentLabel:SetPoint("LEFT", argentCheckbox, "RIGHT", 5, 0)
+    argentLabel:SetWidth(260)
+    argentLabel:SetJustifyH("LEFT")
+    argentLabel:SetText("脱战后自动装备银色黎明徽记")
     
     -- 确认按钮
     local confirmButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
@@ -1828,6 +1917,7 @@ function FRD:CreateSettingsFrame()
         FRD_Settings.monitorInterval = slider3:GetValue()
         FRD_Settings.monitorShowOOC = monitorOOCCheckbox:GetChecked() == 1
         FRD_Settings.repairReminderEnabled = repairCheckbox:GetChecked() == 1
+        FRD_Settings.autoEquipArgentDawn = argentCheckbox:GetChecked() == 1
         FRD:ApplyEconomyShieldPendingToSettings()
         
         -- 如果主动模式状态改变，更新检测状态
@@ -1863,6 +1953,7 @@ function FRD:CreateSettingsFrame()
         slider3:SetValue(FRD_Settings.monitorInterval or 0.5)
         monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
         repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
+        argentCheckbox:SetChecked(FRD_Settings.autoEquipArgentDawn)
         FRD:ResetEconomyShieldPendingFromSettings()
         frame:Hide()
     end)
@@ -1915,6 +2006,7 @@ function FRD:CreateSettingsFrame()
         "· 勤俭盾牌设置：拖拽背包盾牌到图标或点击图标使用当前副手，右键清除。",
         "· 如果不希望主动侦测，或者自动模式遇到使用问题，可将 /frd 绑定技能宏触发检测。",
         "· 小地图图标：右键可切换插件开关。",
+        "· 脱战后自动装备银色黎明徽记到饰品栏1。",
         "",
         "· 作者：安娜希尔",
         "",
