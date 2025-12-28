@@ -2,7 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
-local FRD_VERSION = 2.05
+local FRD_VERSION = 2.06
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -14,6 +14,8 @@ FRD_Settings = {
     economyShieldEnabled = false, -- 启用勤俭盾牌
     economyShieldThreshold = 50, -- 勤俭盾牌血量阈值(%)
     autoEquipArgentDawn = false, -- 脱战后自动装备银色黎明徽记
+    autoEquipArgentDawnRestoreEnabled = false, -- 脱战后自动恢复原饰品
+    autoEquipArgentDawnRestoreDelay = 60, -- 恢复延迟(秒)
     monitorEnabled = false, -- 战斗中显示耐久监控
     monitorInterval = 0.5, -- 监控刷新频率（秒）
     monitorShowOOC = false, -- 脱战后也显示监控
@@ -45,6 +47,11 @@ FRD.disksCacheDirty = true
 FRD.disksCacheThrottle = 0.3
 FRD.disksCacheUpdateScheduled = false
 FRD.lastDiskCacheUpdate = 0
+FRD.restoreTrinketReadyTime = nil
+FRD.restoreTrinketItemLink = nil
+FRD.restoreTrinketItemId = nil
+FRD.restoreTrinketWarnedMissing = false
+FRD.restoreTrinketFrame = nil
 
 FRD:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
@@ -89,6 +96,12 @@ FRD:SetScript("OnEvent", function()
         if FRD_Settings.autoEquipArgentDawn == nil then
             FRD_Settings.autoEquipArgentDawn = false
         end
+        if FRD_Settings.autoEquipArgentDawnRestoreEnabled == nil then
+            FRD_Settings.autoEquipArgentDawnRestoreEnabled = false
+        end
+        if not FRD_Settings.autoEquipArgentDawnRestoreDelay then
+            FRD_Settings.autoEquipArgentDawnRestoreDelay = 60
+        end
         if not FRD_Settings.repairReminderPosition then
             FRD_Settings.repairReminderPosition = { point = "TOP", relativePoint = "TOP", x = 0, y = -120 }
         end
@@ -107,6 +120,7 @@ FRD:SetScript("OnEvent", function()
     elseif event == "PLAYER_REGEN_DISABLED" then
         FRD.inCombat = true
         FRD.economyShieldLockedInCombat = false
+        FRD:StopArgentDawnRestoreTimer()
         FRD:HideRepairReminder()
         if FRD_Settings.autoMode and FRD_Settings.enabled then
             FRD:StartAutoCheck()
@@ -126,6 +140,7 @@ FRD:SetScript("OnEvent", function()
         FRD:UpdateMonitorVisibility(true)
         FRD:CheckRepairReminder()
         FRD:AutoEquipArgentDawnTrinket()
+        FRD:ResumeArgentDawnRestore()
     elseif event == "BAG_UPDATE" or event == "UPDATE_INVENTORY_ALERTS" then
         FRD:MarkDiskCacheDirty()
         FRD:MarkEconomyShieldCacheDirty()
@@ -161,6 +176,14 @@ function FRD:MigrateSettings(oldVersion)
     if oldVersion < 2.04 then
         if FRD_Settings.autoEquipArgentDawn == nil then
             FRD_Settings.autoEquipArgentDawn = false
+        end
+    end
+    if oldVersion < 2.06 then
+        if FRD_Settings.autoEquipArgentDawnRestoreEnabled == nil then
+            FRD_Settings.autoEquipArgentDawnRestoreEnabled = false
+        end
+        if not FRD_Settings.autoEquipArgentDawnRestoreDelay then
+            FRD_Settings.autoEquipArgentDawnRestoreDelay = 60
         end
     end
 end
@@ -1114,7 +1137,7 @@ function FRD:TryEquipEconomyShieldWhenAllDisksBroken(silent, offhandIsDisk, curr
 end
 
 function FRD:GetArgentDawnTrinketPriority(itemId)
-    if itemId == 236351 or itemId == 236352 then
+    if itemId == 23206 or itemId == 23207 then
         return 1
     end
     if itemId == 19812 or itemId == 13209 then
@@ -1150,14 +1173,151 @@ function FRD:FindBestArgentDawnTrinket()
     return best
 end
 
+function FRD:FindItemInBagsByLinkOrId(itemLink, itemId)
+    local targetId = itemId
+    if not targetId and itemLink then
+        targetId = self:GetItemIdFromLink(itemLink)
+    end
+    for bag = 0, 4 do
+        for slot = 1, GetContainerNumSlots(bag) do
+            local link = GetContainerItemLink(bag, slot)
+            if link then
+                if itemLink and link == itemLink then
+                    return bag, slot
+                end
+                if targetId and self:GetItemIdFromLink(link) == targetId then
+                    return bag, slot
+                end
+            end
+        end
+    end
+    return nil
+end
+
 function FRD:EquipTrinket(bag, slot, invSlot)
     PickupContainerItem(bag, slot)
     PickupInventoryItem(invSlot)
 end
 
+function FRD:SetArgentDawnRestoreTarget(itemLink, itemId)
+    self.restoreTrinketItemLink = itemLink
+    self.restoreTrinketItemId = itemId
+    self.restoreTrinketWarnedMissing = false
+end
+
+function FRD:ClearArgentDawnRestoreTarget()
+    self.restoreTrinketReadyTime = nil
+    self.restoreTrinketItemLink = nil
+    self.restoreTrinketItemId = nil
+    self.restoreTrinketWarnedMissing = false
+    self:StopArgentDawnRestoreTimer()
+end
+
+function FRD:ScheduleArgentDawnRestore()
+    if not FRD_Settings.autoEquipArgentDawnRestoreEnabled then
+        self:ClearArgentDawnRestoreTarget()
+        return
+    end
+    local delay = FRD_Settings.autoEquipArgentDawnRestoreDelay or 60
+    if delay < 30 then delay = 30 end
+    if delay > 180 then delay = 180 end
+    self.restoreTrinketReadyTime = GetTime() + delay
+    if not self.inCombat then
+        self:StartArgentDawnRestoreTimer()
+    end
+end
+
+function FRD:ResumeArgentDawnRestore()
+    if not self.restoreTrinketReadyTime then
+        return
+    end
+    if not FRD_Settings.autoEquipArgentDawnRestoreEnabled then
+        self:ClearArgentDawnRestoreTarget()
+        return
+    end
+    if self.inCombat then
+        return
+    end
+    self:StartArgentDawnRestoreTimer()
+    if GetTime() >= self.restoreTrinketReadyTime then
+        self:TryRestoreArgentDawnTrinket()
+    end
+end
+
+function FRD:StartArgentDawnRestoreTimer()
+    if not self.restoreTrinketReadyTime then
+        return
+    end
+    if not self.restoreTrinketFrame then
+        self.restoreTrinketFrame = CreateFrame("Frame")
+    end
+    self.restoreTrinketFrame:SetScript("OnUpdate", function()
+        if not FRD.restoreTrinketReadyTime then
+            FRD:StopArgentDawnRestoreTimer()
+            return
+        end
+        if FRD.inCombat then
+            return
+        end
+        if GetTime() >= FRD.restoreTrinketReadyTime then
+            FRD:TryRestoreArgentDawnTrinket()
+        end
+    end)
+end
+
+function FRD:StopArgentDawnRestoreTimer()
+    if self.restoreTrinketFrame then
+        self.restoreTrinketFrame:SetScript("OnUpdate", nil)
+    end
+end
+
+function FRD:TryRestoreArgentDawnTrinket()
+    if not self.restoreTrinketReadyTime then
+        return
+    end
+    if self.inCombat then
+        return
+    end
+    if not FRD_Settings.enabled or not FRD_Settings.autoEquipArgentDawnRestoreEnabled then
+        self:ClearArgentDawnRestoreTarget()
+        return
+    end
+
+    local equippedLink = GetInventoryItemLink("player", 13)
+    if equippedLink then
+        if self.restoreTrinketItemLink and equippedLink == self.restoreTrinketItemLink then
+            self:ClearArgentDawnRestoreTarget()
+            return
+        end
+        local equippedId = self:GetItemIdFromLink(equippedLink)
+        local isArgent = self:GetArgentDawnTrinketPriority(equippedId)
+        if not isArgent and equippedId ~= self.restoreTrinketItemId then
+            self:ClearArgentDawnRestoreTarget()
+            return
+        end
+    end
+
+    local bag, slot = self:FindItemInBagsByLinkOrId(self.restoreTrinketItemLink, self.restoreTrinketItemId)
+    if not bag then
+        if not self.restoreTrinketWarnedMissing then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff9900[FRD]|r 未找到原饰品，无法自动恢复")
+            self.restoreTrinketWarnedMissing = true
+        end
+        self:ClearArgentDawnRestoreTarget()
+        return
+    end
+
+    self:EquipTrinket(bag, slot, 13)
+    self:ClearArgentDawnRestoreTarget()
+end
+
 function FRD:AutoEquipArgentDawnTrinket()
     if not FRD_Settings.enabled or not FRD_Settings.autoEquipArgentDawn then
         return
+    end
+
+    if not FRD_Settings.autoEquipArgentDawnRestoreEnabled and self.restoreTrinketReadyTime then
+        self:ClearArgentDawnRestoreTarget()
     end
 
     local best = self:FindBestArgentDawnTrinket()
@@ -1167,15 +1327,29 @@ function FRD:AutoEquipArgentDawnTrinket()
     end
 
     local equippedLink = GetInventoryItemLink("player", 13)
+    local equippedId = nil
     if equippedLink then
-        local equippedId = self:GetItemIdFromLink(equippedLink)
+        equippedId = self:GetItemIdFromLink(equippedLink)
         local equippedPriority = self:GetArgentDawnTrinketPriority(equippedId)
         if equippedPriority and equippedPriority <= best.priority then
             return
         end
     end
 
+    local originalLink = nil
+    local originalId = nil
+    if FRD_Settings.autoEquipArgentDawnRestoreEnabled and equippedLink and equippedId then
+        if not self:GetArgentDawnTrinketPriority(equippedId) then
+            originalLink = equippedLink
+            originalId = equippedId
+        end
+    end
+
     self:EquipTrinket(best.bag, best.slot, 13)
+    if originalLink then
+        self:SetArgentDawnRestoreTarget(originalLink, originalId)
+        self:ScheduleArgentDawnRestore()
+    end
 end
 
 -- 装备盾牌
@@ -1604,7 +1778,7 @@ end
 function FRD:CreateSettingsFrame()
     local frame = CreateFrame("Frame", "FRDSettingsFrame", UIParent)
     frame:SetWidth(350)
-    frame:SetHeight(600)
+    frame:SetHeight(650)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -1858,7 +2032,9 @@ function FRD:CreateSettingsFrame()
         monitorInterval = monitorIntervalValue,
         monitorShowOOC = FRD_Settings.monitorShowOOC,
         repairReminderEnabled = FRD_Settings.repairReminderEnabled,
-        autoEquipArgentDawn = FRD_Settings.autoEquipArgentDawn
+        autoEquipArgentDawn = FRD_Settings.autoEquipArgentDawn,
+        autoEquipArgentDawnRestoreEnabled = FRD_Settings.autoEquipArgentDawnRestoreEnabled,
+        autoEquipArgentDawnRestoreDelay = FRD_Settings.autoEquipArgentDawnRestoreDelay
     }
 
     -- 脱战也显示监控复选框
@@ -1899,6 +2075,44 @@ function FRD:CreateSettingsFrame()
     argentLabel:SetWidth(260)
     argentLabel:SetJustifyH("LEFT")
     argentLabel:SetText("脱战后自动装备银色黎明徽记")
+
+    -- 脱战后自动恢复原饰品
+    local argentRestoreCheckbox = CreateFrame("CheckButton", "FRDAutoEquipArgentDawnRestoreCheckbox", frame, "UICheckButtonTemplate")
+    argentRestoreCheckbox:SetPoint("TOPLEFT", frame, "TOPLEFT", 48, -505)
+    argentRestoreCheckbox:SetWidth(24)
+    argentRestoreCheckbox:SetHeight(24)
+    argentRestoreCheckbox:SetChecked(FRD_Settings.autoEquipArgentDawnRestoreEnabled)
+
+    local argentRestoreLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    argentRestoreLabel:SetPoint("LEFT", argentRestoreCheckbox, "RIGHT", 5, 0)
+    argentRestoreLabel:SetWidth(235)
+    argentRestoreLabel:SetJustifyH("LEFT")
+    argentRestoreLabel:SetText("脱战后自动恢复原饰品")
+
+    local argentDelayLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    argentDelayLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", 48, -528)
+    argentDelayLabel:SetWidth(200)
+    argentDelayLabel:SetJustifyH("LEFT")
+    argentDelayLabel:SetText("恢复延迟(秒):")
+
+    local argentDelaySlider = CreateFrame("Slider", "FRDAutoEquipArgentDawnDelaySlider", frame, "OptionsSliderTemplate")
+    argentDelaySlider:SetPoint("TOPLEFT", frame, "TOPLEFT", 40, -548)
+    argentDelaySlider:SetMinMaxValues(30, 180)
+    argentDelaySlider:SetValueStep(5)
+    argentDelaySlider:SetWidth(250)
+    getglobal(argentDelaySlider:GetName() .. "Low"):SetText("30")
+    getglobal(argentDelaySlider:GetName() .. "High"):SetText("180")
+
+    local argentDelayValue = FRD_Settings.autoEquipArgentDawnRestoreDelay or 60
+    if argentDelayValue < 30 then argentDelayValue = 30 end
+    if argentDelayValue > 180 then argentDelayValue = 180 end
+    argentDelaySlider:SetValue(argentDelayValue)
+    getglobal(argentDelaySlider:GetName() .. "Text"):SetText(string.format("%d秒", argentDelayValue))
+
+    argentDelaySlider:SetScript("OnValueChanged", function()
+        local newValue = this:GetValue()
+        getglobal(this:GetName() .. "Text"):SetText(string.format("%d秒", newValue))
+    end)
     
     -- 确认按钮
     local confirmButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
@@ -1918,6 +2132,11 @@ function FRD:CreateSettingsFrame()
         FRD_Settings.monitorShowOOC = monitorOOCCheckbox:GetChecked() == 1
         FRD_Settings.repairReminderEnabled = repairCheckbox:GetChecked() == 1
         FRD_Settings.autoEquipArgentDawn = argentCheckbox:GetChecked() == 1
+        FRD_Settings.autoEquipArgentDawnRestoreEnabled = argentRestoreCheckbox:GetChecked() == 1
+        FRD_Settings.autoEquipArgentDawnRestoreDelay = argentDelaySlider:GetValue()
+        if not FRD_Settings.autoEquipArgentDawnRestoreEnabled then
+            FRD:ClearArgentDawnRestoreTarget()
+        end
         FRD:ApplyEconomyShieldPendingToSettings()
         
         -- 如果主动模式状态改变，更新检测状态
@@ -1954,6 +2173,8 @@ function FRD:CreateSettingsFrame()
         monitorOOCCheckbox:SetChecked(FRD_Settings.monitorShowOOC)
         repairCheckbox:SetChecked(FRD_Settings.repairReminderEnabled)
         argentCheckbox:SetChecked(FRD_Settings.autoEquipArgentDawn)
+        argentRestoreCheckbox:SetChecked(FRD_Settings.autoEquipArgentDawnRestoreEnabled)
+        argentDelaySlider:SetValue(FRD_Settings.autoEquipArgentDawnRestoreDelay or 60)
         FRD:ResetEconomyShieldPendingFromSettings()
         frame:Hide()
     end)
@@ -2007,6 +2228,7 @@ function FRD:CreateSettingsFrame()
         "· 如果不希望主动侦测，或者自动模式遇到使用问题，可将 /frd 绑定技能宏触发检测。",
         "· 小地图图标：右键可切换插件开关。",
         "· 脱战后自动装备银色黎明徽记到饰品栏1。",
+        "· 可设置脱战后在指定时间恢复原本饰品。",
         "",
         "· 作者：安娜希尔",
         "",
