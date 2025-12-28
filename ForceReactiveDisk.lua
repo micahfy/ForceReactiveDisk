@@ -2,7 +2,7 @@
 -- 力反馈盾牌管理插件 for WoW 1.12
 
 local ADDON_NAME = "ForceReactiveDisk"
-local FRD_VERSION = 2.07
+local FRD_VERSION = 2.08
 local FORCE_REACTIVE_DISK_ID = 18168 -- 力反馈盾牌物品ID
 
 -- 默认设置（会被SavedVariables覆盖）
@@ -245,26 +245,26 @@ function FRD:CreateMonitorFrame()
     local restorePanel = CreateFrame("Frame", nil, frame)
     restorePanel:SetPoint("TOPLEFT", container, "BOTTOMLEFT", 0, -6)
     restorePanel:SetWidth(280)
-    restorePanel:SetHeight(24)
+    restorePanel:SetHeight(42)
     restorePanel:Hide()
     frame.restorePanel = restorePanel
 
     local restoreText = restorePanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    restoreText:SetPoint("LEFT", restorePanel, "LEFT", 0, 0)
-    restoreText:SetWidth(130)
-    restoreText:SetJustifyH("LEFT")
+    restoreText:SetPoint("TOP", restorePanel, "TOP", 0, 0)
+    restoreText:SetWidth(280)
+    restoreText:SetJustifyH("CENTER")
     restoreText:SetText("")
     restorePanel.text = restoreText
 
     local restoreAdd = CreateFrame("Button", nil, restorePanel, "UIPanelButtonTemplate")
-    restoreAdd:SetPoint("RIGHT", restorePanel, "RIGHT", 0, 0)
+    restoreAdd:SetPoint("TOP", restorePanel, "TOP", -38, -16)
     restoreAdd:SetWidth(62)
     restoreAdd:SetHeight(18)
     restoreAdd:SetText("+15秒")
     restorePanel.addButton = restoreAdd
 
     local restoreNow = CreateFrame("Button", nil, restorePanel, "UIPanelButtonTemplate")
-    restoreNow:SetPoint("RIGHT", restoreAdd, "LEFT", -6, 0)
+    restoreNow:SetPoint("LEFT", restoreAdd, "RIGHT", 6, 0)
     restoreNow:SetWidth(70)
     restoreNow:SetHeight(18)
     restoreNow:SetText("立即替换")
@@ -447,8 +447,8 @@ function FRD:UpdateMonitorText(force)
     local rows = math.max(1, math.ceil(totalCount / usedCols))
     local contentWidth = usedCols * (iconSize + padding) - padding
     if contentWidth < 120 then contentWidth = 120 end
-    if showRestore and contentWidth < 270 then
-        contentWidth = 270
+    if showRestore and contentWidth < 170 then
+        contentWidth = 170
     end
     local frameWidth = contentWidth + 20
     local contentHeight = rows * (iconSize + 18)
@@ -474,10 +474,12 @@ function FRD:UpdateMonitorText(force)
                 restorePanel.nowButton:Enable()
             end
             restorePanel:SetWidth(frameWidth - 20)
+            restorePanel:SetHeight(42)
+            restorePanel.text:SetWidth(frameWidth - 20)
             restorePanel:ClearAllPoints()
             restorePanel:SetPoint("TOPLEFT", self.monitorFrame.iconContainer, "BOTTOMLEFT", 0, -8)
             restorePanel:Show()
-            frameHeight = frameHeight + 32
+            frameHeight = frameHeight + 50
         else
             restorePanel:Hide()
         end
